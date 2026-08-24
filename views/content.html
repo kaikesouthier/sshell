@@ -1,0 +1,75 @@
+<main class="flex-grow flex flex-col min-w-0 min-h-0 bg-bg">
+
+    <div id="gridToolbar" class="hidden shrink-0 h-14 bg-panel border-b border-edge px-3 items-center gap-2">
+
+        <!-- Who the actions apply to -->
+        <div class="flex items-center gap-1 shrink-0">
+            <button id="btnGridSelAll" title="Select all servers" class="w-7 h-7 rounded flex items-center justify-center transition-colors text-faint hover:text-accent hover:bg-panel2">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"></path></svg>
+            </button>
+            <button id="btnGridSelNone" title="Clear server selection" class="w-7 h-7 rounded flex items-center justify-center transition-colors text-faint hover:text-txt hover:bg-panel2">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+            </button>
+        </div>
+        <div class="w-px h-5 bg-edge shrink-0"></div>
+
+        <!-- What to do to them -->
+        <button id="btnInteractive" class="bg-panel2 hover:bg-panel3 text-muted hover:text-txt border border-edge text-xs font-semibold px-3 py-2 rounded-md transition-colors whitespace-nowrap flex items-center gap-1.5">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.46 12C3.73 7.94 7.52 5 12 5s8.27 2.94 9.54 7c-1.27 4.06-5.06 7-9.54 7s-8.27-2.94-9.54-7z"></path></svg><span id="interactiveLabel">Interactive</span>
+        </button>
+        <button id="btnPasteAll" class="bg-panel2 hover:bg-panel3 text-muted hover:text-txt border border-edge text-xs font-semibold px-3 py-2 rounded-md transition-colors whitespace-nowrap">Paste</button>
+        <button id="btnGridUpload" class="bg-panel2 hover:bg-panel3 text-muted hover:text-txt border border-edge text-xs font-semibold px-3 py-2 rounded-md transition-colors whitespace-nowrap flex items-center gap-1.5">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 9l5-5 5 5M12 4v12"></path></svg>
+            <span id="gridUploadLabel">Upload…</span>
+        </button>
+
+        <!-- Live status -->
+        <span id="interactiveHint" class="hidden text-[11px] text-warn whitespace-nowrap shrink-0">Click server headers to choose targets</span>
+        <span id="gridUploadStatus" class="hidden text-[11px] font-mono text-accent whitespace-nowrap shrink-0"></span>
+        <button id="btnGridUploadCancel" class="hidden bg-bad/20 text-bad border border-bad text-xs font-semibold px-3 py-2 rounded-md transition-colors whitespace-nowrap shrink-0">Stop</button>
+
+        <!-- How it is laid out -->
+        <div class="ml-auto flex items-center gap-2 shrink-0">
+            <div id="gridColsBox" class="flex items-center gap-0.5 bg-panel2 border border-edge rounded-md p-0.5" title="Columns used by the grid and by Recenter">
+                <span class="text-[10px] text-faint font-semibold px-1.5">COLS</span>
+                <button id="btnCols2" class="cols-btn">2</button>
+                <button id="btnCols4" class="cols-btn">4</button>
+            </div>
+            <button id="btnGridLayout" class="bg-panel2 hover:bg-panel3 text-muted hover:text-txt border border-edge text-xs font-semibold px-3 py-2 rounded-md transition-colors whitespace-nowrap flex items-center gap-1.5">
+                <svg id="gridLayoutIcon" class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 5h6v6H4zM14 5h6v6h-6zM4 15h6v4H4zM14 15h6v4h-6z"></path></svg>
+                <span id="gridLayoutLabel">Free Layout</span>
+            </button>
+            <button id="btnGridArrange" title="Re-flow the panes into a grid and bring them back into view" class="hidden bg-panel2 hover:bg-panel3 text-muted hover:text-txt border border-edge text-xs font-semibold px-3 py-2 rounded-md transition-colors whitespace-nowrap flex items-center gap-1.5">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v3m0 12v3M3 12h3m12 0h3"></path><circle cx="12" cy="12" r="4" stroke-width="2"></circle></svg>
+                Recenter
+            </button>
+            <div id="gridZoomBox" class="hidden items-center gap-0.5 bg-panel2 border border-edge rounded-md px-1 py-1">
+                <button id="btnZoomOut" title="Zoom out (−)" class="w-6 h-6 rounded flex items-center justify-center text-muted hover:text-txt hover:bg-panel3 transition-colors">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 12h14"></path></svg>
+                </button>
+                <button id="gridZoomLabel" title="Reset zoom to 100% (0)" class="text-[10px] font-mono text-muted hover:text-txt w-10 text-center transition-colors">100%</button>
+                <button id="btnZoomIn" title="Zoom in (+)" class="w-6 h-6 rounded flex items-center justify-center text-muted hover:text-txt hover:bg-panel3 transition-colors">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 5v14M5 12h14"></path></svg>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div id="views" class="flex-grow relative min-h-0 bg-black">
+        <div id="emptyState" class="absolute inset-0 flex flex-col items-center justify-center text-center gap-4 bg-bg">
+            <div class="w-16 h-16 rounded-2xl bg-gradient-to-br from-accent/20 to-indigo-500/10 border border-edge flex items-center justify-center">
+                <svg class="w-8 h-8 text-accent/80" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 9l3 3-3 3m5 0h3"></path><rect x="3" y="4" width="18" height="16" rx="2" stroke-width="1.5"></rect></svg>
+            </div>
+            <div>
+                <h2 class="text-txt font-semibold text-base">No session open</h2>
+                <p class="text-muted text-xs mt-1 max-w-xs">Pick a saved session on the left to open it in a tab, or create a new one.</p>
+            </div>
+            <button id="btnEmptyNew" class="mt-1 bg-accent hover:bg-accent-hover text-white text-xs font-semibold px-4 py-2 rounded-md transition-colors">＋ New Session</button>
+        </div>
+    </div>
+
+    <div id="statusBar" class="relative shrink-0 bg-panel border-t border-edge flex items-center gap-3 px-3 text-[12px] text-muted select-none">
+        <div id="statusLeft" class="nobar flex items-center gap-3 min-w-0 flex-grow overflow-x-auto whitespace-nowrap"><span class="w-1.5 h-1.5 rounded-full bg-faint"></span><span class="truncate">Ready</span></div>
+        <div id="statusRight" class="flex items-center gap-3 font-mono text-faint shrink-0"></div>
+    </div>
+</main>

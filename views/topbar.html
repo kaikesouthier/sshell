@@ -1,0 +1,23 @@
+<div class="topbar drag h-11 shrink-0 bg-bg flex items-stretch pr-[140px]">
+        <div style="width:var(--sidebar-w)" class="flex items-stretch shrink-0 overflow-hidden border-r border-edge select-none">
+        <div class="drag flex items-center gap-2 pl-3 pr-2 shrink-0">
+            <div class="w-7 h-7 rounded-md bg-gradient-to-br from-accent to-indigo-500 flex items-center justify-center shadow">
+                <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l3 3-3 3m5 0h3"></path><rect x="3" y="4" width="18" height="16" rx="2" stroke-width="2"></rect></svg>
+            </div>
+            <span class="font-semibold tracking-tight text-txt/90 text-[13px] hidden lg:block">SSH<span class="text-accent">ell</span></span>
+        </div>
+        <div id="menubar" class="no-drag flex items-stretch text-[12px] font-medium shrink-0">
+            <button class="menu-btn" data-menu="file">File</button>
+            <button class="menu-btn" data-menu="edit">Edit</button>
+            <button class="menu-btn" data-menu="tools">Tools</button>
+        </div>
+        <div class="drag flex-grow self-stretch"></div>
+    </div>
+
+        <div id="tabStrip" class="no-drag flex items-stretch overflow-x-auto overflow-y-hidden min-w-0"></div>
+    <div class="drag flex-grow self-stretch min-w-0"></div>
+
+    <button id="btnNewTab" title="Open session (Ctrl+T)" class="no-drag shrink-0 w-10 flex items-center justify-center text-muted hover:text-txt hover:bg-panel2 transition-colors">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 5v14M5 12h14"></path></svg>
+    </button>
+</div>

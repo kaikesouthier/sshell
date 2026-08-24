@@ -1,0 +1,241 @@
+
+<div id="sessionModal" class="hidden fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="w-full max-w-md max-h-[calc(100vh-2rem)] bg-panel2 border border-edge2 rounded-xl shadow-2xl fade-in flex flex-col overflow-hidden">
+        <div class="px-5 py-4 border-b border-edge flex items-center justify-between">
+            <h3 id="modalTitle" class="font-semibold text-txt">New Session</h3>
+            <button id="modalClose" class="text-faint hover:text-txt transition-colors"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg></button>
+        </div>
+        <div class="p-5 space-y-4 overflow-y-auto min-h-0 flex-grow">
+            <div class="flex gap-3 items-end">
+                <div class="flex-grow">
+                    <label class="block text-[11px] font-semibold text-muted mb-1">Session name</label>
+                    <input id="fLabel" type="text" placeholder="e.g. Prod Web 01" class="w-full bg-panel border border-edge rounded-md px-3 py-2 text-sm text-txt placeholder-faint focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/50">
+                </div>
+                <div class="shrink-0">
+                    <label class="block text-[11px] font-semibold text-muted mb-1">Icon</label>
+                    <button id="fIconBtn" type="button" title="Choose icon & color" class="w-11 h-[38px] flex items-center justify-center bg-panel border border-edge rounded-md hover:border-accent transition-colors">
+                        <span id="fIconPreview" class="w-6 h-6 flex items-center justify-center"></span>
+                    </button>
+                </div>
+            </div>
+            <div class="flex gap-3">
+                <div class="flex-grow"><label class="block text-[11px] font-semibold text-muted mb-1">Host</label>
+                    <input id="fHost" type="text" placeholder="192.168.1.10 or example.com" class="w-full bg-panel border border-edge rounded-md px-3 py-2 text-sm text-txt placeholder-faint focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/50"></div>
+                <div class="w-24"><label class="block text-[11px] font-semibold text-muted mb-1">Port</label>
+                    <input id="fPort" type="number" placeholder="22" value="22" class="w-full bg-panel border border-edge rounded-md px-3 py-2 text-sm text-txt placeholder-faint focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/50"></div>
+            </div>
+            <div><label class="block text-[11px] font-semibold text-muted mb-1">Username</label>
+                <input id="fUser" type="text" placeholder="root" class="w-full bg-panel border border-edge rounded-md px-3 py-2 text-sm text-txt placeholder-faint focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/50"></div>
+            <div><label class="block text-[11px] font-semibold text-muted mb-1">Folder</label>
+                <select id="fFolder" class="w-full bg-panel border border-edge rounded-md px-3 py-2 text-sm text-txt focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/50"></select></div>
+            <div>
+                <label class="block text-[11px] font-semibold text-muted mb-1">Authentication</label>
+                <div class="flex bg-panel border border-edge rounded-md p-0.5 text-xs font-medium">
+                    <button data-auth="password" class="auth-tab flex-1 py-1.5 rounded transition-colors">Password</button>
+                    <button data-auth="key" class="auth-tab flex-1 py-1.5 rounded transition-colors">Private Key</button>
+                </div>
+            </div>
+            <div id="authPassword"><label class="block text-[11px] font-semibold text-muted mb-1">Password</label>
+                <div class="relative">
+                    <input id="fPassword" type="password" placeholder="••••••••" class="w-full bg-panel border border-edge rounded-md pl-3 pr-10 py-2 text-sm text-txt placeholder-faint focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/50">
+                    <button id="fPasswordEye" type="button" title="Show (asks for your master passphrase)" class="reveal-eye">
+                        <svg data-eye="show" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.46 12C3.73 7.94 7.52 5 12 5s8.27 2.94 9.54 7c-1.27 4.06-5.06 7-9.54 7s-8.27-2.94-9.54-7z"></path></svg>
+                        <svg data-eye="hide" class="w-4 h-4 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M3 3l18 18"></path></svg>
+                    </button>
+                </div></div>
+            <div id="authKey" class="hidden space-y-3">
+                <div><label class="block text-[11px] font-semibold text-muted mb-1">Private key file</label>
+                    <div class="flex gap-2">
+                        <input id="fKeyPath" type="text" placeholder="C:\Users\you\.ssh\id_rsa" class="flex-grow bg-panel border border-edge rounded-md px-3 py-2 text-sm text-txt placeholder-faint focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/50">
+                        <button id="btnBrowseKey" class="bg-panel3 hover:bg-edge2 text-txt text-xs font-medium px-3 rounded-md border border-edge transition-colors whitespace-nowrap">Browse…</button>
+                    </div></div>
+                <div><label class="block text-[11px] font-semibold text-muted mb-1">Passphrase <span class="text-faint font-normal">(optional)</span></label>
+                    <div class="relative">
+                        <input id="fPassphrase" type="password" placeholder="Leave blank if none" class="w-full bg-panel border border-edge rounded-md pl-3 pr-10 py-2 text-sm text-txt placeholder-faint focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/50">
+                    <button id="fPassphraseEye" type="button" title="Show (asks for your master passphrase)" class="reveal-eye">
+                        <svg data-eye="show" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.46 12C3.73 7.94 7.52 5 12 5s8.27 2.94 9.54 7c-1.27 4.06-5.06 7-9.54 7s-8.27-2.94-9.54-7z"></path></svg>
+                        <svg data-eye="hide" class="w-4 h-4 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M3 3l18 18"></path></svg>
+                    </button>
+                    </div></div>
+            </div>
+            <div id="modalError" class="hidden text-xs text-bad bg-bad/10 border border-bad/30 rounded-md px-3 py-2"></div>
+        </div>
+        <div class="px-5 py-4 border-t border-edge flex items-center justify-between gap-2">
+            <button id="modalDelete" class="hidden text-xs font-medium text-bad hover:text-white hover:bg-bad px-3 py-2 rounded-md border border-bad/40 transition-colors">Delete</button>
+            <div class="flex gap-2 ml-auto">
+                <button id="modalCancel" class="text-xs font-medium text-muted hover:text-txt px-4 py-2 rounded-md transition-colors">Cancel</button>
+                <button id="modalSave" class="bg-accent hover:bg-accent-hover text-white text-xs font-semibold px-4 py-2 rounded-md transition-colors">Save</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+
+<div id="bulkModal" class="hidden fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="w-full max-w-lg max-h-[calc(100vh-2rem)] bg-panel2 border border-edge2 rounded-xl shadow-2xl fade-in flex flex-col overflow-hidden">
+        <div class="px-5 py-4 border-b border-edge flex items-center justify-between">
+            <h3 class="font-semibold text-txt">Add Multiple Servers</h3>
+            <button id="bulkClose" class="text-faint hover:text-txt transition-colors"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg></button>
+        </div>
+        <div class="p-5 space-y-4 overflow-y-auto min-h-0 flex-grow">
+            <div>
+                <label class="block text-[11px] font-semibold text-muted mb-1">Hosts <span class="text-faint font-normal">— one per line. Optional name with <code class="text-accent">name , host</code></span></label>
+                <textarea id="bLines" rows="6" placeholder="10.0.0.1&#10;10.0.0.2&#10;web-03 , 10.0.0.3" class="w-full bg-panel border border-edge rounded-md px-3 py-2 text-sm font-mono text-txt placeholder-faint focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/50 resize-y"></textarea>
+            </div>
+            <div class="flex gap-3">
+                <div class="flex-grow"><label class="block text-[11px] font-semibold text-muted mb-1">Name template <span class="text-faint font-normal">({'{'}n{'}'}, {'{'}host{'}'})</span></label>
+                    <input id="bTemplate" type="text" value="{host}" class="w-full bg-panel border border-edge rounded-md px-3 py-2 text-sm text-txt focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/50"></div>
+                <div class="w-24"><label class="block text-[11px] font-semibold text-muted mb-1">Port</label>
+                    <input id="bPort" type="number" value="22" class="w-full bg-panel border border-edge rounded-md px-3 py-2 text-sm text-txt focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/50"></div>
+            </div>
+            <div class="flex gap-3">
+                <div class="flex-grow"><label class="block text-[11px] font-semibold text-muted mb-1">Username</label>
+                    <input id="bUser" type="text" placeholder="root" class="w-full bg-panel border border-edge rounded-md px-3 py-2 text-sm text-txt placeholder-faint focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/50"></div>
+                <div class="w-48"><label class="block text-[11px] font-semibold text-muted mb-1">Folder</label>
+                    <select id="bFolder" class="w-full bg-panel border border-edge rounded-md px-3 py-2 text-sm text-txt focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/50"></select></div>
+            </div>
+            <div>
+                <label class="block text-[11px] font-semibold text-muted mb-1">Shared authentication</label>
+                <div class="flex bg-panel border border-edge rounded-md p-0.5 text-xs font-medium">
+                    <button data-bauth="password" class="bauth-tab flex-1 py-1.5 rounded transition-colors">Password</button>
+                    <button data-bauth="key" class="bauth-tab flex-1 py-1.5 rounded transition-colors">Private Key</button>
+                </div>
+            </div>
+            <div id="bAuthPassword"><label class="block text-[11px] font-semibold text-muted mb-1">Password (shared)</label>
+                <input id="bPassword" type="password" placeholder="••••••••" class="w-full bg-panel border border-edge rounded-md px-3 py-2 text-sm text-txt placeholder-faint focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/50"></div>
+            <div id="bAuthKey" class="hidden space-y-3">
+                <div><label class="block text-[11px] font-semibold text-muted mb-1">Private key file (shared)</label>
+                    <div class="flex gap-2"><input id="bKeyPath" type="text" placeholder="C:\Users\you\.ssh\id_rsa" class="flex-grow bg-panel border border-edge rounded-md px-3 py-2 text-sm text-txt placeholder-faint focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/50">
+                    <button id="bBrowseKey" class="bg-panel3 hover:bg-edge2 text-txt text-xs font-medium px-3 rounded-md border border-edge transition-colors whitespace-nowrap">Browse…</button></div></div>
+                <div><label class="block text-[11px] font-semibold text-muted mb-1">Passphrase <span class="text-faint font-normal">(optional)</span></label>
+                    <input id="bPassphrase" type="password" class="w-full bg-panel border border-edge rounded-md px-3 py-2 text-sm text-txt focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/50"></div>
+            </div>
+            <div id="bulkError" class="hidden text-xs text-bad bg-bad/10 border border-bad/30 rounded-md px-3 py-2"></div>
+        </div>
+        <div class="px-5 py-4 border-t border-edge flex items-center justify-between gap-2">
+            <span id="bulkCount" class="text-xs text-faint"></span>
+            <div class="flex gap-2"><button id="bulkCancel" class="text-xs font-medium text-muted hover:text-txt px-4 py-2 rounded-md transition-colors">Cancel</button>
+                <button id="bulkSave" class="bg-accent hover:bg-accent-hover text-white text-xs font-semibold px-4 py-2 rounded-md transition-colors">Create Sessions</button></div>
+        </div>
+    </div>
+</div>
+
+
+<div id="themeModal" class="hidden fixed inset-0 z-[140] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="w-full max-w-3xl bg-panel2 border border-edge2 rounded-xl shadow-2xl fade-in overflow-hidden flex flex-col max-h-[88vh]">
+        <div class="px-5 py-4 border-b border-edge flex items-center justify-between shrink-0">
+            <div>
+                <h3 class="font-semibold text-txt flex items-center gap-2">
+                    <svg class="w-4 h-4 text-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828L11 18.657"></path></svg>
+                    Theme Builder
+                </h3>
+                <p class="text-[11px] text-muted mt-0.5">Customize every color — changes preview live across the app.</p>
+            </div>
+            <button id="themeClose" class="text-faint hover:text-txt transition-colors"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg></button>
+        </div>
+        <div class="flex min-h-0 flex-grow">
+            <div id="themeControls" class="w-1/2 overflow-y-auto p-4 border-r border-edge"></div>
+            <div class="w-1/2 p-4 overflow-y-auto">
+                <div class="text-[11px] font-semibold tracking-widest text-faint uppercase mb-2">Live Preview</div>
+                <div id="themePreview"></div>
+                <p class="text-[10px] text-faint mt-3 leading-relaxed">Every change applies live to the whole app. <span class="text-muted">Cancel</span> reverts; <span class="text-accent">Save Theme</span> stores it in your config.</p>
+            </div>
+        </div>
+        <div class="px-5 py-4 border-t border-edge flex items-center justify-between gap-2 shrink-0">
+            <button id="themeReset" class="text-xs font-medium text-muted hover:text-txt px-3 py-2 rounded-md border border-edge transition-colors">Reset to default</button>
+            <div class="flex gap-2">
+                <button id="themeCancel" class="text-xs font-medium text-muted hover:text-txt px-4 py-2 rounded-md transition-colors">Cancel</button>
+                <button id="themeSave" class="bg-accent hover:bg-accent-hover text-white text-xs font-semibold px-4 py-2 rounded-md transition-colors">Save Theme</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+
+<div id="configModal" class="hidden fixed inset-0 z-[150] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="w-full max-w-2xl bg-panel2 border border-edge2 rounded-xl shadow-2xl fade-in overflow-hidden flex flex-col max-h-[88vh]">
+        <div class="px-5 py-4 border-b border-edge flex items-center justify-between shrink-0">
+            <h3 class="font-semibold text-txt flex items-center gap-2">
+                <svg class="w-4 h-4 text-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+                Configuration
+            </h3>
+            <button id="cfgClose" class="text-faint hover:text-txt transition-colors"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg></button>
+        </div>
+        <div class="p-5 space-y-6 overflow-y-auto">
+            <div>
+                <div class="text-[11px] font-semibold tracking-widest text-faint uppercase mb-2">Storage Location</div>
+                <p class="text-xs text-muted mb-2">Where <span class="text-txt">config.json</span> and <span class="text-txt">sessions.json</span> are saved.</p>
+                <div class="flex gap-2 items-center">
+                    <input id="cfgDataDir" type="text" readonly class="flex-grow bg-panel border border-edge rounded-md px-3 py-2 text-xs font-mono text-txt focus:outline-none">
+                    <button id="cfgChangeDir" class="bg-panel3 hover:bg-edge2 text-txt text-xs font-medium px-3 py-2 rounded-md border border-edge transition-colors whitespace-nowrap">Change…</button>
+                </div>
+                <p class="text-[10px] text-faint mt-1.5">Changing this writes your data to the new folder and uses it from now on.</p>
+            </div>
+            <div>
+                <div class="text-[11px] font-semibold tracking-widest text-faint uppercase mb-2">Saved Passwords</div>
+                <div id="cfgPwLocked">
+                    <p class="text-xs text-muted mb-3">Viewing stored passwords requires your master passphrase.</p>
+                    <button id="cfgReveal" class="bg-accent hover:bg-accent-hover text-white text-xs font-semibold px-4 py-2 rounded-md transition-colors flex items-center gap-2">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.74 5.74L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.59a1 1 0 01.29-.7l6.96-6.96A6 6 0 1121 9z"></path></svg>
+                        Reveal passwords
+                    </button>
+                </div>
+                <div id="cfgPwUnlocked" class="hidden">
+                    <div class="relative mb-2">
+                        <svg class="w-3.5 h-3.5 text-faint absolute left-2.5 top-1/2 -translate-y-1/2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35M11 18a7 7 0 100-14 7 7 0 000 14z"></path></svg>
+                        <input id="cfgPwSearch" type="text" placeholder="Search servers" class="w-full bg-panel border border-edge rounded-md pl-8 pr-2 py-1.5 text-xs text-txt placeholder-faint focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/50">
+                    </div>
+                    <div class="border border-edge rounded-md overflow-auto max-h-72">
+                        <table class="w-full text-[11px]" style="min-width:520px">
+                            <thead class="sticky top-0 bg-panel text-faint"><tr class="text-left">
+                                <th class="font-semibold px-2.5 py-2">Name</th>
+                                <th class="font-semibold px-2.5 py-2">Host</th>
+                                <th class="font-semibold px-2.5 py-2">User</th>
+                                <th class="font-semibold px-2.5 py-2">Password / Key</th>
+                            </tr></thead>
+                            <tbody id="cfgPwTable"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="px-5 py-4 border-t border-edge flex justify-end shrink-0">
+            <button id="cfgDone" class="bg-accent hover:bg-accent-hover text-white text-xs font-semibold px-4 py-2 rounded-md transition-colors">Done</button>
+        </div>
+    </div>
+</div>
+
+
+<div id="iconPicker" class="hidden fixed inset-0 z-[160] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="w-full max-w-lg bg-panel2 border border-edge2 rounded-xl shadow-2xl fade-in overflow-hidden flex flex-col max-h-[85vh]">
+        <div class="px-5 py-4 border-b border-edge flex items-center justify-between shrink-0">
+            <h3 class="font-semibold text-txt">Choose Icon</h3>
+            <button id="ipClose" class="text-faint hover:text-txt transition-colors"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg></button>
+        </div>
+        <div class="px-5 py-3 border-b border-edge shrink-0">
+            <div class="text-[11px] font-semibold tracking-widest text-faint uppercase mb-2">Color</div>
+            <div id="ipColors" class="flex flex-wrap gap-2"></div>
+        </div>
+        <div id="ipGrid" class="p-3 grid grid-cols-8 gap-1.5 flex-1 min-h-0 overflow-y-auto content-start"></div>
+        <div class="px-5 py-4 border-t border-edge flex items-center justify-between gap-2 shrink-0">
+            <button id="ipClear" class="text-xs font-medium text-muted hover:text-txt px-3 py-2 rounded-md border border-edge transition-colors">No icon</button>
+            <div class="flex gap-2">
+                <button id="ipCancel" class="text-xs font-medium text-muted hover:text-txt px-4 py-2 rounded-md transition-colors">Cancel</button>
+                <button id="ipOk" class="bg-accent hover:bg-accent-hover text-white text-xs font-semibold px-4 py-2 rounded-md transition-colors">Use icon</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="shortcutsModal" class="hidden fixed inset-0 z-[186] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="w-full max-w-3xl max-h-[calc(100vh-2rem)] bg-panel2 border border-edge2 rounded-xl shadow-2xl fade-in flex flex-col overflow-hidden">
+        <div class="px-5 py-4 border-b border-edge flex items-center justify-between shrink-0">
+            <h3 class="font-semibold text-txt">Keyboard Shortcuts</h3>
+            <button id="shortcutsClose" class="text-faint hover:text-txt transition-colors"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg></button>
+        </div>
+        <div id="shortcutsBody" class="p-5 overflow-y-auto min-h-0 flex-grow"></div>
+        <div class="px-5 py-4 border-t border-edge flex justify-end shrink-0">
+            <button id="shortcutsDone" class="bg-accent hover:bg-accent-hover text-white text-xs font-semibold px-4 py-2 rounded-md transition-colors">Close</button>
+        </div>
+    </div>
+</div>

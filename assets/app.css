@@ -1,0 +1,310 @@
+:root {
+    --bg-rgb: 11 14 20; --panel-rgb: 15 19 27; --panel2-rgb: 22 27 36; --panel3-rgb: 28 34 45;
+    --edge-rgb: 35 42 53; --edge2-rgb: 48 58 72;
+    --txt-rgb: 230 237 243; --muted-rgb: 139 149 165; --faint-rgb: 90 100 115;
+    --accent-rgb: 91 155 255; --accentHover-rgb: 127 179 255; --accentDim-rgb: 33 48 80;
+    --ok-rgb: 63 185 80; --warn-rgb: 227 179 65; --bad-rgb: 248 81 73;
+
+    --bg: rgb(11 14 20); --panel: rgb(15 19 27); --panel2: rgb(22 27 36); --panel3: rgb(28 34 45);
+    --edge: rgb(35 42 53); --edge2: rgb(48 58 72);
+    --txt: rgb(230 237 243); --muted: rgb(139 149 165); --faint: rgb(90 100 115);
+    --accent: rgb(91 155 255); --accentHover: rgb(127 179 255);
+    --ok: rgb(63 185 80); --warn: rgb(227 179 65); --bad: rgb(248 81 73);
+
+        --sidebar-w: 16rem;
+}
+html, body { height: 100%; }
+body {
+    background-color: var(--bg); color: var(--txt); overflow: hidden;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+::-webkit-scrollbar { width: 9px; height: 9px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--edge2); border-radius: 5px; border: 2px solid transparent; background-clip: content-box; }
+::-webkit-scrollbar-thumb:hover { background: var(--muted); background-clip: content-box; }
+
+.xterm-viewport { overflow-y: auto !important; }
+.xterm-screen { width: 100% !important; }
+
+.drag { -webkit-app-region: drag; }
+.no-drag { -webkit-app-region: no-drag; }
+.tab { -webkit-app-region: no-drag; }
+html.is-other .topbar { padding-right: 0; }
+html.is-other .drag { -webkit-app-region: no-drag; }
+
+.menu-btn { padding: 0 10px; display: flex; align-items: center; color: var(--muted); }
+.menu-btn:hover, .menu-btn.open { background: var(--panel2); color: var(--txt); }
+
+.tab { position: relative; transition: background-color .12s ease, color .12s ease; }
+.tab::after { content: ''; position: absolute; left: 0; right: 0; bottom: -1px; height: 2px; background: transparent; transition: background-color .12s ease; }
+.tab.active::after { background: var(--accent); }
+
+.term-view { position: absolute; inset: 0; }
+.term-view .xterm { padding: 6px 8px; height: 100%; }
+
+/* Row actions float over the right edge instead of taking layout space, so an
+   un-hovered row shows its full name rather than truncating to make room. */
+.sess-item, .folder-row { position: relative; }
+.sess-item .sess-actions, .folder-row .folder-actions {
+    position: absolute; right: 4px; top: 50%; transform: translateY(-50%);
+    opacity: 0; pointer-events: none; transition: opacity .12s ease;
+    padding: 2px 2px 2px 10px; border-radius: 6px;
+    background: rgb(var(--panel2-rgb) / .94);
+    box-shadow: -10px 0 10px -6px rgb(var(--panel2-rgb) / .94);
+}
+.sess-item:hover .sess-actions, .folder-row:hover .folder-actions { opacity: 1; pointer-events: auto; }
+
+input[type=range] { -webkit-appearance: none; background: transparent; }
+input[type=range]::-webkit-slider-runnable-track { height: 4px; background: var(--edge2); border-radius: 2px; }
+input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; height: 14px; width: 14px; margin-top: -5px; border-radius: 50%; background: var(--accent); cursor: pointer; border: 2px solid var(--bg); }
+
+
+/* Armed for broadcast: only the servers you picked receive keystrokes, so mark
+   exactly those rather than outlining the whole grid. */
+@keyframes armed-glow {
+    0%, 100% { box-shadow: 0 0 0 2px rgb(var(--bad-rgb) / .75); }
+    50%      { box-shadow: 0 0 0 2px rgb(var(--bad-rgb)), 0 0 16px rgb(var(--bad-rgb) / .45); }
+}
+.grid-cell.cell-armed { animation: armed-glow 1.6s infinite; }
+.grid-cell.cell-armed > div:first-child { background: rgb(var(--bad-rgb) / .22); }
+.grid-cell.cell-armed .server-name { color: var(--bad); }
+
+.fade-in { animation: fade .14s ease both; }
+@keyframes fade { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+.chev { transition: transform .12s ease; }
+.chev.collapsed { transform: rotate(-90deg); }
+
+.side-tab { color: var(--muted); border-bottom: 2px solid transparent; }
+.side-tab:hover { color: var(--txt); background: var(--panel2); }
+.side-tab.active { color: var(--accent); border-bottom-color: var(--accent); background: var(--panel); }
+
+.sftp-tool { width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; border-radius: 6px; color: var(--muted); }
+.sftp-tool:hover { color: var(--txt); background: var(--panel2); }
+
+.sftp-row { cursor: pointer; user-select: none; }
+.sftp-row:hover { background: var(--panel2); }
+.sftp-row.dir .sftp-name { color: var(--accentHover); }
+
+.sess-item.is-selected, .folder-row.is-selected {
+    background: rgb(var(--accent-rgb) / .16);
+    box-shadow: inset 2px 0 0 0 var(--accent);
+}
+.sess-item.is-selected:hover, .folder-row.is-selected:hover { background: rgb(var(--accent-rgb) / .24); }
+.sess-item.is-selected .sess-actions, .folder-row.is-selected .folder-actions { opacity: 1; pointer-events: auto; }
+
+#ctxMenu button:disabled { opacity: .45; }
+
+.grid-cell.cell-selected { --tw-ring-color: var(--accent); box-shadow: 0 0 0 2px var(--accent), 0 0 14px rgb(var(--accent-rgb) / .3); }
+.grid-cell.cell-selected > div:first-child { background: rgb(var(--accent-rgb) / .18); }
+
+/* Free-canvas mode: panes become absolutely positioned and draggable. */
+.grid-canvas { position: relative; cursor: grab; }
+.grid-canvas.canvas-panning { cursor: grabbing; }
+.grid-canvas.canvas-panning .grid-cell { pointer-events: none; }
+
+/* Sizer: a transform does not affect layout, so this gives the scroll
+   container something to scroll over at the current zoom. */
+.canvas-spacer { position: absolute; top: 0; left: 0; width: 1px; height: 1px; pointer-events: none; }
+.canvas-layer { position: absolute; top: 0; left: 0; width: 0; height: 0; }
+
+/* Faint grid so panning and zooming have a sense of place. */
+.grid-canvas {
+    background-image:
+        linear-gradient(to right, rgb(var(--edge-rgb) / .30) 1px, transparent 1px),
+        linear-gradient(to bottom, rgb(var(--edge-rgb) / .30) 1px, transparent 1px);
+    background-size: 40px 40px;
+}
+
+.grid-canvas .grid-cell { position: absolute; }
+.grid-canvas .grid-cell > div:first-child { cursor: move; }
+/* No transition and its own compositor layer while dragging, so the pane
+   tracks the pointer exactly instead of easing toward it. */
+.grid-canvas .grid-cell.cell-active {
+    box-shadow: 0 10px 34px rgba(0, 0, 0, .55), 0 0 0 2px var(--accent);
+    opacity: .96;
+    transition: none !important;
+    will-change: transform;
+}
+.grid-canvas .grid-cell.cell-active,
+.grid-canvas .grid-cell.cell-active * { user-select: none; }
+
+/* Handles exist in both modes; only the canvas shows them. */
+.rz { display: none; }
+.grid-canvas .rz { display: block; position: absolute; z-index: 5; }
+.grid-canvas .rz-r { top: 0; right: -3px; width: 7px; height: 100%; cursor: ew-resize; }
+.grid-canvas .rz-b { left: 0; bottom: -3px; height: 7px; width: 100%; cursor: ns-resize; }
+.grid-canvas .rz-br { right: -2px; bottom: -2px; width: 15px; height: 15px; cursor: nwse-resize; z-index: 6; }
+.grid-canvas .rz-br::after {
+    content: ''; position: absolute; right: 3px; bottom: 3px; width: 7px; height: 7px;
+    border-right: 2px solid var(--edge2); border-bottom: 2px solid var(--edge2); border-radius: 0 0 2px 0;
+}
+.grid-canvas .grid-cell:hover .rz-br::after { border-color: var(--accent); }
+
+.sess-item.dragging, .folder-row.dragging { opacity: .45; }
+.drop-into { background: rgb(var(--accent-rgb)/.14) !important; box-shadow: inset 0 0 0 1px var(--accent); border-radius: 6px; }
+.drop-before { box-shadow: inset 0 2px 0 0 var(--accent); }
+.drop-after { box-shadow: inset 0 -2px 0 0 var(--accent); }
+.drop-bad { background: rgb(var(--bad-rgb)/.12) !important; box-shadow: inset 0 0 0 1px var(--bad); border-radius: 6px; cursor: no-drop; }
+#sessionList.drop-root { box-shadow: inset 0 0 0 2px rgb(var(--accent-rgb)/.5); border-radius: 8px; }
+
+.tab.dragging { opacity: .5; }
+.tab.tab-drop { box-shadow: inset 3px 0 0 0 var(--accent); }
+
+.spinner { width: 24px; height: 24px; border: 2px solid var(--edge2); border-top-color: var(--accent); border-radius: 50%; animation: spin .7s linear infinite; }
+.spinner.sm { width: 13px; height: 13px; border-width: 2px; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.sftp-busy .sftp-tool, .sftp-busy #sftpPath, .sftp-busy #sftpUp { pointer-events: none; opacity: .45; }
+.sftp-busy #sftpBody { pointer-events: none; }
+.sort-th { cursor: pointer; }
+.sort-th:hover { color: var(--txt); }
+.swatch { width: 26px; height: 26px; border-radius: 6px; border: 1px solid var(--edge2); cursor: pointer; padding: 0; }
+.nobar::-webkit-scrollbar { display: none; }
+/* overflow-x:auto forces overflow-y to compute as auto, so a stray pixel of
+   vertical overflow inside the 44px strip produced a vertical scrollbar beside
+   the new-tab button. The strip only ever scrolls sideways. */
+#tabStrip { overflow-y: hidden; }
+#tabStrip::-webkit-scrollbar { height: 6px; }
+#tabStrip::-webkit-scrollbar:vertical { display: none; width: 0; }
+/* Same class of bug in reverse: the sidebar tree scrolls vertically only, and
+   a deeply indented row must truncate rather than add a horizontal bar. */
+#sessionList { overflow-x: hidden; }
+#tabStrip::-webkit-scrollbar-thumb { background: var(--edge2); border: none; }
+#tabStrip::-webkit-scrollbar-thumb:hover { background: var(--muted); }
+
+/* Empty-state host for the free canvas: the layer itself is a zero-size
+   transformed box, so a message inside it would wrap to one word per line. */
+.canvas-empty { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; pointer-events: none; }
+.canvas-empty.hidden { display: none; }
+
+/* ---- Resizable sidebar ------------------------------------------------- */
+.side-grip {
+    position: absolute; top: 0; right: -3px; width: 6px; height: 100%;
+    cursor: col-resize; z-index: 20; background: transparent;
+}
+.side-grip::after {
+    content: ''; position: absolute; inset: 0 2px; border-radius: 2px;
+    background: transparent; transition: background-color .12s ease;
+}
+.side-grip:hover::after, .side-grip.grip-active::after { background: var(--accent); }
+html.resizing-sidebar, html.resizing-sidebar * { cursor: col-resize !important; user-select: none !important; }
+
+/* ---- Resizable status bar --------------------------------------------- */
+#statusBar { height: var(--status-h, 32px); }
+.status-grip {
+    position: absolute; left: 0; right: 0; top: -3px; height: 6px;
+    cursor: row-resize; z-index: 20; background: transparent;
+}
+.status-grip::after {
+    content: ''; position: absolute; inset: 2px 0; border-radius: 2px;
+    background: transparent; transition: background-color .12s ease;
+}
+.status-grip:hover::after, .status-grip.grip-active::after { background: var(--accent); }
+html.resizing-status, html.resizing-status * { cursor: row-resize !important; user-select: none !important; }
+
+/* Past one row the extra height is only useful if the metrics can use it. */
+html.status-tall #statusBar { align-items: flex-start; padding-top: 6px; padding-bottom: 6px; }
+html.status-tall #statusLeft {
+    flex-wrap: wrap; white-space: normal; overflow-x: hidden; overflow-y: auto;
+    align-content: flex-start; row-gap: 4px; max-height: 100%;
+}
+html.status-tall #statusRight { align-self: flex-start; }
+
+/* ---- Rubber-band selection -------------------------------------------- */
+.marquee-box {
+    position: fixed; z-index: 60; pointer-events: none;
+    border: 1px solid var(--accent);
+    background: rgb(var(--accent-rgb) / .16);
+    border-radius: 2px;
+}
+html.marquee-active, html.marquee-active * { user-select: none !important; }
+
+.sftp-row.is-selected { background: rgb(var(--accent-rgb) / .20) !important; }
+.sftp-row.is-selected .sftp-name { color: var(--txt); }
+
+/* ---- Buttons ----------------------------------------------------------- */
+/* One treatment everywhere: no drop shadows on controls, a visible focus ring
+   for keyboard users, and a consistent pressed state. Shadows are reserved for
+   surfaces that genuinely float (modals, menus, a dragged pane). */
+button { -webkit-tap-highlight-color: transparent; }
+button:not(:disabled) { cursor: pointer; }
+button:disabled { cursor: default; }
+button:focus { outline: none; }
+button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; border-radius: 6px; }
+button:not(:disabled):active { transform: translateY(0.5px); }
+.sftp-tool, .side-tab, .menu-btn, .ip-icon, .ip-color { box-shadow: none; }
+
+/* ---- Narrow windows ---------------------------------------------------- */
+/* The grid toolbar holds a lot; let it scroll sideways rather than squashing
+   its controls or pushing them out of the window. */
+#gridToolbar { overflow-x: auto; overflow-y: hidden; scrollbar-width: thin; }
+#gridToolbar::-webkit-scrollbar { height: 5px; }
+#gridToolbar > * { flex: 0 0 auto; }
+@media (max-width: 1100px) {
+    #gridInfo { display: none; }
+}
+@media (max-width: 900px) {
+    #zoomSlider { width: 60px; }
+}
+
+/* Segmented column picker — replaces a 2-position range slider, which was an
+   odd control for a two-value choice and ate a lot of toolbar width. */
+.cols-btn {
+    min-width: 22px; height: 22px; padding: 0 6px; border-radius: 4px;
+    font-size: 11px; font-weight: 600; color: var(--muted);
+    transition: background-color .12s ease, color .12s ease;
+}
+.cols-btn:hover { color: var(--txt); background: var(--panel3); }
+.cols-btn.is-active { background: var(--accent); color: #fff; }
+
+/* Reveal toggle sitting inside a secret input */
+.reveal-eye {
+    position: absolute;
+    right: 6px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 6px;
+    color: rgb(var(--faint-rgb));
+    background: transparent;
+    border: 0;
+    cursor: pointer;
+    transition: color .12s ease, background-color .12s ease;
+}
+.reveal-eye:hover { color: rgb(var(--txt-rgb)); background: rgb(var(--panel2-rgb)); }
+.reveal-eye:focus-visible { outline: none; box-shadow: 0 0 0 2px rgb(var(--accent-rgb) / .55); }
+
+/* ---- Keyboard shortcuts help ------------------------------------------ */
+#shortcutsBody { columns: 2; column-gap: 32px; }
+@media (max-width: 720px) { #shortcutsBody { columns: 1; } }
+
+.sc-section { break-inside: avoid; margin-bottom: 18px; }
+.sc-title {
+    font-size: 11px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .06em; color: var(--accent); margin-bottom: 6px;
+}
+.sc-row { display: flex; gap: 10px; align-items: baseline; padding: 2px 0; }
+.sc-keys { flex: 0 0 auto; width: 132px; }
+.sc-desc { flex: 1 1 auto; min-width: 0; font-size: 12px; line-height: 1.45; color: var(--muted); }
+.sc-note {
+    font-size: 11px; line-height: 1.5; color: var(--faint);
+    border-left: 2px solid var(--edge2); padding: 2px 0 2px 8px; margin-top: 6px;
+}
+.sc-mouse { font-size: 11px; color: var(--txt); }
+.sc-plus, .sc-or { color: var(--faint); font-size: 10px; margin: 0 3px; }
+.kbd {
+    display: inline-block; min-width: 1.5em; padding: 1px 5px;
+    border: 1px solid var(--edge2); border-bottom-width: 2px; border-radius: 5px;
+    background: var(--panel); color: var(--txt);
+    font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+    font-size: 10.5px; line-height: 1.5; text-align: center; white-space: nowrap;
+}
+
+/* Narrow windows: stack each key combo above its description. */
+@media (max-width: 560px) {
+    .sc-row { flex-direction: column; gap: 2px; padding: 4px 0; }
+    .sc-keys { width: auto; }
+}

@@ -1,0 +1,30 @@
+<div id="inputModal" class="hidden fixed inset-0 z-[185] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="w-full max-w-sm max-h-[calc(100vh-2rem)] bg-panel2 border border-edge2 rounded-xl shadow-2xl fade-in flex flex-col overflow-hidden">
+        <div class="px-5 py-4 border-b border-edge shrink-0"><h3 id="inputTitle" class="font-semibold text-txt">Input</h3></div>
+        <div class="p-5 space-y-3 overflow-y-auto min-h-0 flex-grow">
+            <p id="inputMsg" class="text-xs text-muted hidden whitespace-pre-line leading-relaxed"></p>
+            <div id="inputFields" class="space-y-3"></div>
+            <div id="inputError" class="hidden text-xs text-bad bg-bad/10 border border-bad/30 rounded-md px-3 py-2"></div>
+        </div>
+        <div class="px-5 py-4 border-t border-edge flex gap-2 justify-end shrink-0">
+            <button id="inputCancel" class="text-xs font-medium text-muted hover:text-txt px-4 py-2 rounded-md transition-colors">Cancel</button>
+            <button id="inputOk" class="bg-accent hover:bg-accent-hover text-white text-xs font-semibold px-4 py-2 rounded-md transition-colors">OK</button>
+        </div>
+    </div>
+</div>
+
+<div id="msgModal" class="hidden fixed inset-0 z-[195] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="w-full max-w-sm max-h-[calc(100vh-2rem)] bg-panel2 border border-edge2 rounded-xl shadow-2xl fade-in flex flex-col overflow-hidden">
+        <div class="px-5 py-4 flex items-start gap-3 overflow-y-auto min-h-0 flex-grow">
+            <div id="msgIcon" class="shrink-0 mt-0.5"></div>
+            <div class="min-w-0 flex-grow">
+                <h3 id="msgTitle" class="font-semibold text-txt">Notice</h3>
+                <p id="msgBody" class="text-xs text-muted mt-1 whitespace-pre-line break-words leading-relaxed"></p>
+            </div>
+        </div>
+        <div class="px-5 py-3 border-t border-edge flex justify-end gap-2 shrink-0">
+            <button id="msgCancel" class="hidden text-xs font-medium text-muted hover:text-txt px-4 py-2 rounded-md transition-colors">Cancel</button>
+            <button id="msgOk" class="bg-accent hover:bg-accent-hover text-white text-xs font-semibold px-4 py-2 rounded-md transition-colors">OK</button>
+        </div>
+    </div>
+</div>

@@ -1,0 +1,103 @@
+{
+  "name": "sshell",
+  "productName": "SSHell",
+  "version": "1.0.0",
+  "description": "A modern, encrypted SSH session manager — tabbed terminals, an SFTP client, a live server dashboard, a broadcast grid, and full theming.",
+  "keywords": [
+    "ssh",
+    "sftp",
+    "terminal",
+    "ssh-client",
+    "electron",
+    "session-manager",
+    "server-monitor"
+  ],
+  "homepage": "https://github.com/kaikesouthier/sshell#readme",
+  "bugs": {
+    "url": "https://github.com/kaikesouthier/sshell/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/kaikesouthier/sshell.git"
+  },
+  "author": "Kaike Southier (https://github.com/kaikesouthier)",
+  "license": "MIT",
+  "main": "main.js",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "start": "electron .",
+    "pack": "npm run css && electron-builder --dir",
+    "dist": "npm run css && electron-builder --win",
+    "dist:linux": "npm run css && electron-builder --linux",
+    "make-ico": "electron tools/make-ico.js",
+    "make-icons": "electron tools/make-icons.js",
+    "test": "node test/run.js",
+    "css": "tailwindcss -i assets/tailwind.src.css -o assets/tailwind.css --minify"
+  },
+  "dependencies": {
+    "ssh2": "^1.17.0",
+    "xterm": "^5.3.0",
+    "xterm-addon-fit": "^0.8.0"
+  },
+  "devDependencies": {
+    "electron": "^43.4.0",
+    "electron-builder": "^26.15.3",
+    "tailwindcss": "^3.4.19"
+  },
+  "build": {
+    "appId": "com.sshell.app",
+    "productName": "SSHell",
+    "artifactName": "${productName}-${version}-${arch}.${ext}",
+    "files": [
+      "index.html",
+      "main.js",
+      "app.js",
+      "src/**/*",
+      "views/**/*",
+      "assets/**/*",
+      "!**/sessions.json",
+      "!**/sessions.json.bak",
+      "!**/config.json",
+      "!**/config.json.bak",
+      "!**/known_hosts.json",
+      "!**/known_hosts.json.bak",
+      "!assets/tailwind.src.css"
+    ],
+    "asarUnpack": [
+      "assets/**"
+    ],
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ],
+      "icon": "assets/icon.ico"
+    },
+    "portable": {
+      "artifactName": "${productName}-${version}-${arch}-portable.${ext}"
+    },
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb"
+      ],
+      "icon": "assets/icon.png",
+      "category": "Utility",
+      "maintainer": "Kaike Southier <kaikesouthier@users.noreply.github.com>"
+    },
+    "nsis": {
+      "artifactName": "${productName}-${version}-${arch}-setup.${ext}",
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "SSHell",
+      "installerIcon": "assets/icon.ico",
+      "uninstallerIcon": "assets/icon.ico",
+      "installerHeaderIcon": "assets/icon.ico"
+    }
+  }
+}
