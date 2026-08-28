@@ -11,12 +11,52 @@ const dialog = require('./dialog');
 const errors = require('./errors');
 const xfer = require('./xfer');
 
-const sftpState = { tabId: null, cwd: null, entries: [], loading: false, error: null, sortKey: 'name', sortDir: 1, reqSeq: 0, selected: new Set(), anchor: null };
+const sftpState = { tabId: null, cwd: null, entries: [], loading: false, error: null, sortKey: 'name', sortDir: 1, reqSeq: 0, selected: new Set(), anchor: null, cache: new Map() };
+
+// A small per-(server, directory) listing cache so switching servers or folders
+// repaints instantly instead of blanking to a spinner for a round trip. Every
+// visit still re-reads the directory in the background, so what you see is only
+// ever a frame stale — the cache is for the first paint, not the source of truth.
+const SFTP_CACHE_MAX = 80;
+// The chosen sort column and direction persist across restarts.
+const SORT_KEYS = new Set(['name', 'size', 'mtime']);
+function loadSortPref() {
+    try {
+        const s = require('./config').data.sftpSort;
+        if (s && SORT_KEYS.has(s.key)) { sftpState.sortKey = s.key; sftpState.sortDir = s.dir === -1 ? -1 : 1; }
+    } catch (e) {}
+}
+function saveSortPref() {
+    try {
+        const config = require('./config');
+        config.data.sftpSort = { key: sftpState.sortKey, dir: sftpState.sortDir };
+        config.save();
+    } catch (e) {}
+}
+
+function cacheKey(tabId, dir) { return tabId + '|' + dir; }
+function entriesSig(entries) { return entries.map(e => JSON.stringify([e.name, e.size, e.mtime, e.access])).join(String.fromCharCode(10)); }
+function getCacheRec(tabId, dir) { return sftpState.cache.get(cacheKey(tabId, dir)) || null; }
+function putCache(tabId, dir, entries) {
+    const k = cacheKey(tabId, dir);
+    sftpState.cache.delete(k);
+    sftpState.cache.set(k, { entries, sig: entriesSig(entries) });
+    while (sftpState.cache.size > SFTP_CACHE_MAX) sftpState.cache.delete(sftpState.cache.keys().next().value);
+}
+function invalidateCache(tabId, dir) {
+    if (dir == null) {
+        const prefix = tabId + '|';
+        Array.from(sftpState.cache.keys()).forEach(k => { if (k.indexOf(prefix) === 0) sftpState.cache.delete(k); });
+    } else {
+        sftpState.cache.delete(cacheKey(tabId, dir));
+    }
+}
 
 function targetsTab(id) { return sftpState.tabId === id; }
 function onTabClosed(tab) {
     stopWatchers(tab);
     xfer.closeFor(tab);
+    invalidateCache(tab.id);
     if (sftpState.tabId === tab.id) {
         // Invalidate any listing still in flight, and clear the busy flag.
         sftpState.reqSeq++;
@@ -50,35 +90,34 @@ function ensureSftp(tab, cb) {
         SFTP_OPEN_TIMEOUT
     );
 
-    xfer.clientFor(tab, (cerr, client, dedicated) => {
-        if (settled) return;
-        if (cerr || !client) return flush(cerr || new Error('No connection available.'));
-        try {
-            client.sftp((err, sftp) => {
-                // The timeout already gave up on this one. Nothing will ever
-                // read it, its unclaimed 'error' events would throw, and the
-                // server keeps the session slot until the connection drops — a
-                // few of these and every new channel on this host fails.
-                if (settled) return discardChannel(err ? null : sftp);
-                if (err) return flush(err);
-                sftp._sshellXfer = dedicated;
-                // The SFTP channel is an EventEmitter: an unclaimed 'error' throws.
-                sftp.on('error', e => {
-                    sftp._sshellDead = true;
-                    if (tab.sftp === sftp) tab.sftp = null;
-                    errors.record('sftp.channel', e, tab.title);
-                });
-                sftp.on('close', () => {
-                    sftp._sshellDead = true;
-                    if (tab.sftp === sftp) tab.sftp = null;
-                });
-                tab.sftp = sftp;
-                flush(null, sftp);
+    // Browsing (readdir/stat/mkdir/unlink/rename) is tiny and must feel instant,
+    // so it rides the session's already-open connection rather than paying to
+    // open — and wait on — a second SSH login. Only the heavy file transfers get
+    // their own connection (see openTransferChannel), which is what actually
+    // needs to stay off the interactive shell's pipe.
+    try {
+        tab.client.sftp((err, sftp) => {
+            // The timeout already gave up on this one. Nothing will ever read
+            // it, its unclaimed 'error' events would throw, and the server keeps
+            // the session slot until the connection drops.
+            if (settled) return discardChannel(err ? null : sftp);
+            if (err) return flush(err);
+            // The SFTP channel is an EventEmitter: an unclaimed 'error' throws.
+            sftp.on('error', e => {
+                sftp._sshellDead = true;
+                if (tab.sftp === sftp) tab.sftp = null;
+                errors.record('sftp.channel', e, tab.title);
             });
-        } catch (e) {
-            flush(e);
-        }
-    });
+            sftp.on('close', () => {
+                sftp._sshellDead = true;
+                if (tab.sftp === sftp) tab.sftp = null;
+            });
+            tab.sftp = sftp;
+            flush(null, sftp);
+        });
+    } catch (e) {
+        flush(e);
+    }
 }
 
 const RETRYABLE = new Set(['ETXTBSY', 'EBUSY', 'EAGAIN', 'EWOULDBLOCK']);
@@ -147,7 +186,16 @@ function focusTab(tabId) {
     const t = RT.tabs.find(x => x.id === tabId && x.type === 'terminal' && !x.closed);
     if (!t) return;
     if (!t.connected) return clearTarget('That session is not connected.');
-    if (sftpState.tabId === t.id) { updateTargetLabel(); return; }
+    if (sftpState.tabId === t.id) {
+        updateTargetLabel();
+        // Re-selecting the same server should recover a pane that got stuck on
+        // the loader or an error, rather than doing nothing — which is what
+        // "click Sessions then SFTP again" was working around.
+        if (sftpState.error || (sftpState.loading && !sftpState.entries.length)) {
+            if (sftpState.cwd) sftpList(sftpState.cwd); else openSftpFor(t);
+        }
+        return;
+    }
     // The selection belongs to the server it was made on. Carrying it across
     // meant a bulk Delete could act on same-named files on a different host.
     clearFileSelection();
@@ -214,7 +262,17 @@ function openSftpFor(tab) {
         }
     });
 }
-function sftpRefresh() { if (sftpState.cwd) sftpList(sftpState.cwd); }
+// A refresh always follows something that changed the directory — a delete,
+// rename, upload, save-back, or the manual button — so drop the cached copy
+// first. Otherwise the instant cache paint would flash the pre-change listing
+// (a just-deleted file reappearing) for a round trip before the read corrects
+// it. Plain navigation still paints from cache; only refresh bypasses it.
+function sftpRefresh() {
+    if (!sftpState.cwd) return;
+    const tab = getSftpTab();
+    if (tab) invalidateCache(tab.id, sftpState.cwd);
+    sftpList(sftpState.cwd);
+}
 
 function sftpList(dir) {
     const tab = getSftpTab(); if (!tab) return;
@@ -224,28 +282,52 @@ function sftpList(dir) {
     const req = ++sftpState.reqSeq;
     const stale = () => req !== sftpState.reqSeq || getSftpTab() !== tab;
 
-    setBusy(true); sftpState.error = null; renderSftpLoader();
+    const rec = getCacheRec(tab.id, dir);
+    sftpState.error = null;
     $('sftpPath').value = dir;
+
+    if (rec) {
+        // Paint the last-known listing at once; the readdir below refreshes it.
+        tab.sftpCwd = dir; sftpState.cwd = dir;
+        if (dir !== previousDir) { sftpState.selected.clear(); sftpState.anchor = null; }
+        sftpState.entries = rec.entries;
+        setBusy(false);
+        renderSftpTable();
+    } else {
+        setBusy(true); renderSftpLoader();
+    }
+
     ensureSftp(tab, (err, sftp) => {
         if (stale()) return;
-        if (err) { setBusy(false); return renderSftpError('SFTP error: ' + errors.describe(err), dir); }
+        if (err) { if (!rec) { setBusy(false); renderSftpError('SFTP error: ' + errors.describe(err), dir); } return; }
         let settled = false;
         try {
             sftp.readdir(dir, (e, list) => {
                 if (settled) return; settled = true;
                 if (stale()) return;
-                if (e) { setBusy(false); return renderSftpError('Cannot open ' + dir + '\n\n' + errors.describe(e), dir); }
+                // The directory failed to read — most often it was deleted or
+                // its permissions changed since it was cached. Drop the stale
+                // copy and surface it rather than silently showing a listing
+                // that no longer exists. (A navigate-away already returned via
+                // stale() above, so this only fires while the user is on it.)
+                if (e) { invalidateCache(tab.id, dir); setBusy(false); renderSftpError('Cannot open ' + dir + '\n\n' + errors.describe(e), dir); return; }
                 tab.sftpCwd = dir; sftpState.cwd = dir;
-                if (dir !== previousDir) { sftpState.selected.clear(); sftpState.anchor = null; }
-                try { sftpState.entries = (list || []).map(parseEntry); }
-                catch (pe) { errors.record('parseEntry', pe); sftpState.entries = []; }
+                if (dir !== previousDir && !rec) { sftpState.selected.clear(); sftpState.anchor = null; }
+                let entries;
+                try { entries = (list || []).map(parseEntry); }
+                catch (pe) { errors.record('parseEntry', pe); entries = []; }
+                const changed = !rec || rec.sig !== entriesSig(entries);
+                putCache(tab.id, dir, entries);
+                sftpState.entries = entries;
                 setBusy(false);
-                renderSftpTable();
+                // Skip a redundant repaint when the cached view already matches,
+                // so a background refresh never resets scroll or a live selection.
+                if (changed) renderSftpTable();
             });
         } catch (e) {
             if (settled || stale()) return;
-            settled = true; setBusy(false);
-            renderSftpError('Cannot open ' + dir + '\n\n' + errors.describe(e), dir);
+            settled = true;
+            if (!rec) { setBusy(false); renderSftpError('Cannot open ' + dir + '\n\n' + errors.describe(e), dir); }
         }
     });
 }
@@ -375,6 +457,7 @@ function renderSftpTable() {
         const key = th.dataset.sort;
         if (sftpState.sortKey === key) sftpState.sortDir *= -1;
         else { sftpState.sortKey = key; sftpState.sortDir = 1; }
+        saveSortPref();
         renderSftpTable();
     }));
     // Drop selections for names that are no longer listed.
@@ -777,7 +860,11 @@ const EXECUTABLE_EXT = new Set([
 ]);
 
 async function confirmIfExecutable(name) {
-    const ext = (path.extname(name) || '').toLowerCase();
+    // Windows silently strips trailing dots and spaces from a filename, so a
+    // remote server naming a file "run.exe " or "run.exe." would land on disk as
+    // "run.exe" while path.extname sees ".exe " / "." and slips past the list.
+    const clean = String(name || '').replace(/[ .]+$/, '');
+    const ext = (path.extname(clean) || '').toLowerCase();
     if (!EXECUTABLE_EXT.has(ext)) return true;
     return dialog.confirm(
         '"' + name + '" is a ' + ext + ' file.\n\n' +
@@ -1250,6 +1337,7 @@ function renderTransfers() {
 
 
 function init() {
+    loadSortPref();
     $('sftpUpload').addEventListener('click', () => { if (busy() || !getSftpTab()) return; $('sftpUploadPicker').click(); });
     $('sftpUploadPicker').addEventListener('change', () => {
         const files = Array.from($('sftpUploadPicker').files || []);
@@ -1333,13 +1421,17 @@ function putFile(tab, localPath, remotePath, onProgress, cb) {
         closeChannel(handle.channel);
         handle.channel = null;
         if (handle.cancelled) {
-            // Remove the truncated remote file over the browsing channel.
-            ensureSftp(tab, (er, sftp) => {
-                if (er) return;
-                sftp.unlink(remotePath, u => {
-                    if (u && errCode(u) !== 'ENOENT') errors.record('sftp.cancel.cleanup', u, remotePath);
+            // Only a transfer that actually began writing left a truncated file
+            // behind; cancelling during connect must not delete whatever was
+            // already on the server under that name.
+            if (handle.wrote) {
+                ensureSftp(tab, (er, sftp) => {
+                    if (er) return;
+                    sftp.unlink(remotePath, u => {
+                        if (u && errCode(u) !== 'ENOENT') errors.record('sftp.cancel.cleanup', u, remotePath);
+                    });
                 });
-            });
+            }
             const err = new Error('cancelled'); err.cancelled = true;
             return cb(err);
         }
@@ -1355,7 +1447,7 @@ function putFile(tab, localPath, remotePath, onProgress, cb) {
                 let called = false;
                 const once = e => { if (called) return; called = true; done(e); };
                 try {
-                    t.wrote = true;
+                    handle.wrote = true;
                     ch.fastPut(localPath, remotePath,
                         xferOpts(ch, (transferred, chunk, total) => { if (onProgress) onProgress(transferred, total); }),
                         once);

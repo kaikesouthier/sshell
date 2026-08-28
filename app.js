@@ -103,6 +103,13 @@ document.addEventListener('keydown', e => {
     const k = e.key.toLowerCase();
     const plain = !e.shiftKey;
 
+    // Ctrl+Shift+R resets a terminal left unreadable by binary output.
+    if (e.shiftKey && !e.altKey && k === 'r') {
+        const t = activeTerminal();
+        if (t) { take(); tabs.resetTerminal(t); }
+        return;
+    }
+
     if (plain && k === 'w' && RT.activeTabId) { take(); return tabs.closeTab(RT.activeTabId); }
     if (plain && k === 't') {
         take();

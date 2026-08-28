@@ -31,7 +31,6 @@
     "pack": "npm run css && electron-builder --dir",
     "dist": "npm run css && electron-builder --win",
     "dist:linux": "npm run css && electron-builder --linux",
-    "make-ico": "electron tools/make-ico.js",
     "make-icons": "electron tools/make-icons.js",
     "test": "node test/run.js",
     "css": "tailwindcss -i assets/tailwind.src.css -o assets/tailwind.css --minify"

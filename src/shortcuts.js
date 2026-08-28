@@ -19,6 +19,7 @@ const SECTIONS = [
         title: 'Active session',
         rows: [
             { keys: [['Ctrl', 'R']], text: 'Reconnect — works even when the session is healthy' },
+            { keys: [['Ctrl', 'Shift', 'R']], text: 'Reset the terminal — fixes garbled output after dumping a binary file' },
             { keys: [['Ctrl', 'E']], text: 'Edit this session' },
             { note: 'A shell would normally use Ctrl+R for reverse history search and Ctrl+E to jump to end of line. SSHell takes both, so they no longer reach the remote shell.' }
         ]

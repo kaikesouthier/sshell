@@ -192,6 +192,7 @@ function showTabContextMenu(e, tab) {
         });
         items.push({ label: 'Edit session…', icon: I.edit, disabled: !cfg, act: () => editAndReconnect(tab) });
         items.push({ label: 'Duplicate tab', icon: I.plus, disabled: !cfg, act: () => openTerminalTab(tab.configId) });
+        items.push({ label: 'Reset terminal', sublabel: 'Ctrl+Shift+R', icon: I.refresh, disabled: !tab.term, act: () => resetTerminal(tab) });
         items.push({ sep: true });
     }
 
@@ -200,6 +201,21 @@ function showTabContextMenu(e, tab) {
     items.push({ label: 'Close to the right', sublabel: toRight ? String(toRight) : '', icon: I.x, disabled: !toRight, act: () => closeToRight(tab.id) });
 
     ctxmenu.open(e.clientX, e.clientY, items, { title: tab.title });
+}
+
+// Dumping a binary to the terminal (a stray `cat` of an image, say) can switch
+// the emulator into the DEC line-drawing charset or leave stray SGR state, so
+// every following line renders as garbage. A full reset restores it without
+// dropping the SSH connection. A trailing Ctrl-L nudges most shells to redraw
+// their prompt so the screen is not left blank.
+function resetTerminal(tab) {
+    if (!tab || !tab.term) return;
+    errors.attempt(() => {
+        tab.term.reset();
+        tab.term.write('\x1b[!p\x1b(B\x0f');
+        if (tab.stream && tab.connected) writeInput(tab, '\x0c');
+        fitTerminalTab(tab);
+    }, 'reset terminal');
 }
 
 // Reconnect from the menu has to work on a live session too, which the r-key
@@ -537,5 +553,5 @@ function init() {
 
 module.exports = {
     openTerminalTab, openGridTab, openToolTab, setActiveTab, closeTab, renderTabBar,
-    buildTerminalView, fitTerminalTab, connectTerminalTab, reconnectTab, activeGrid, tabByOffset, tabByNumber, openTabs, init
+    buildTerminalView, fitTerminalTab, connectTerminalTab, reconnectTab, resetTerminal, activeGrid, tabByOffset, tabByNumber, openTabs, init
 };

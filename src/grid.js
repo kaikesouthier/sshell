@@ -8,10 +8,19 @@ const GRID_SAMPLE_CMD = "echo K_MEM; grep -E 'MemTotal|MemAvailable' /proc/memin
 function tabsMod() { return require('./tabs'); }
 
 const WRAP_BASE = 'bg-black h-full border-2 border-transparent transition-colors';
-const WRAP_COLUMNS = ' overflow-y-auto overflow-x-hidden p-1';
+// The extra top padding is a grab strip for starting a Ctrl-drag selection —
+// otherwise the panes reach the top edge and there is nowhere to begin one.
+const WRAP_COLUMNS = ' overflow-y-auto overflow-x-hidden px-1 pb-1 pt-6';
+// A pane narrower than this is unusable, so the fixed view never packs more
+// columns than the window can give this much width to.
+const MIN_CELL_W = 300;
 const WRAP_FREE = ' grid-canvas relative overflow-auto';
 
 const MIN_W = 260, MIN_H = 150, SNAP = 8;
+// Supported fixed-view column counts, and the row height for a given count —
+// tuned so 2 cols ≈ 440px and 4 cols ≈ 240px, extended smoothly to 1 and 5.
+const COL_CHOICES = [1, 2, 3, 4, 5];
+function colRowHeight(cols) { return Math.max(MIN_H, Math.round(800 / Math.max(1, cols) + 40)); }
 const CANVAS_HEADROOM = 1200, CANVAS_STEP = 400;
 // Panes are laid out around this point rather than at 0,0.
 const CANVAS_ORIGIN = 2000;
@@ -136,11 +145,21 @@ function applyMode(state) {
         l.style.transform = '';
         l.style.width = '';
         l.style.height = '';
-        l.style.gridTemplateColumns = `repeat(${state.cols},1fr)`;
-        l.style.gridAutoRows = state.cols === 4 ? '240px' : '440px';
+        applyColumns(state);
         sp.style.display = 'none';
         w.scrollLeft = 0;
     }
+}
+
+// Choose how many columns actually fit: the user's pick, but never so many that
+// a pane would fall below MIN_CELL_W on a narrow window. minmax(0,1fr) lets the
+// cells shrink to share the width instead of overflowing and being clipped.
+function applyColumns(state) {
+    if (state.mode !== 'columns') return;
+    const width = state.wrap.clientWidth || 1200;
+    const eff = Math.max(1, Math.min(state.cols, Math.floor(width / MIN_CELL_W) || 1));
+    state.layer.style.gridTemplateColumns = 'repeat(' + eff + ',minmax(0,1fr))';
+    state.layer.style.gridAutoRows = colRowHeight(eff) + 'px';
 }
 
 const clampZoom = z => Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, z));
@@ -436,7 +455,7 @@ function autoPlace(state, taken) {
     // Work in canvas units: at 50% zoom the viewport shows twice as much canvas.
     const width = Math.max(visibleCanvasWidth(state), MIN_W + 40);
     const w = Math.max(MIN_W, snap(Math.floor((width - 16) / state.cols) - 8));
-    const h = state.cols === 4 ? 240 : 380;
+    const h = colRowHeight(state.cols);
     for (let y = CANVAS_ORIGIN; y < CANVAS_ORIGIN + 8000; y += SNAP * 4) {
         for (let x = CANVAS_ORIGIN; x + w <= CANVAS_ORIGIN + width; x += SNAP * 4) {
             const cand = { x, y, w, h };
@@ -510,7 +529,7 @@ function arrangeColumns(state) {
     // Height has to scale by the same 1/zoom factor as the width, or the panes
     // come out stretched: at 25% zoom the old fixed height made them five times
     // wider than they were tall.
-    const h = Math.max(MIN_H, Math.round((cols === 4 ? 240 : 440) / z) - 8);
+    const h = Math.max(MIN_H, Math.round(colRowHeight(cols) / z) - 8);
     tabs.forEach((t, i) => {
         const rect = {
             x: CANVAS_ORIGIN + (i % cols) * (w + 8),
@@ -781,9 +800,9 @@ function updateLayoutToolbar(g) {
     if (zl && g) zl.textContent = Math.round((free ? g.getZoom() : 1) * 100) + '%';
 
     const cols = g ? g.state.cols : 4;
-    [['btnCols2', 2], ['btnCols4', 4]].forEach(([id, n]) => {
-        const b = $(id);
-        if (b) b.classList.toggle('is-active', cols === n);
+    COL_CHOICES.forEach(c => {
+        const b = $('btnCols' + c);
+        if (b) b.classList.toggle('is-active', cols === c);
     });
 }
 
@@ -827,7 +846,7 @@ function gridMount(state) {
                 <span class="server-name font-bold text-xs text-txt truncate font-mono cursor-pointer hover:text-accent hover:underline" title="Open this tab">${escapeHtml(t.title)}</span>
                 <div class="h-3.5 w-px bg-edge mx-1 shrink-0"></div>
                 <div class="flex items-center gap-2 text-[10px] font-bold font-mono text-faint">
-                    <span class="cpu">CPU ${t.lastStats.cpu}</span><span class="mem hidden md:inline">${t.lastStats.mem}</span><span class="net text-muted">${t.lastStats.net || '↓-- ↑--'}</span>
+                    <span class="cpu">CPU ${t.lastStats.cpu}</span><span class="mem hidden md:inline">${t.lastStats.mem}</span><span class="net text-muted">${t.lastStats.net || '↑-- ↓--'}</span>
                 </div>
                 <span class="xfer hidden text-[10px] font-bold font-mono text-accent shrink-0 ml-auto"></span>
             </div>
@@ -913,6 +932,9 @@ function gridUnmount(state) {
 }
 
 function gridRefit(state) {
+    // Recompute how many columns fit before measuring the terminals, so a
+    // resize reflows the layout instead of squishing panes past usability.
+    applyColumns(state);
     requestAnimationFrame(() => {
         state.cells.forEach((els, tabId) => {
             const t = RT.tabs.find(x => x.id === tabId);
@@ -1014,7 +1036,7 @@ function parseGridSample(tab, text) {
         if (dt > 0) {
             const down = Math.max(0, (rx - prev.rx) * 8 / 1e6 / dt);
             const up = Math.max(0, (tx - prev.tx) * 8 / 1e6 / dt);
-            const netTxt = `↓${down.toFixed(1)} ↑${up.toFixed(1)}`;
+            const netTxt = `↑${up.toFixed(1)} ↓${down.toFixed(1)}`;
             tab.lastStats.net = netTxt;
             if (cur && cur.net) cur.net.innerText = netTxt;
         }
@@ -1077,8 +1099,7 @@ function init() {
             `Paste the clipboard into ${n} selected server${n === 1 ? '' : 's'}?`, { okLabel: 'Paste' })) g.broadcast(t);
     });
     const setCols = n => { const g = activeGrid(); if (g) g.setCols(n); updateGridToolbar(); };
-    $('btnCols2').addEventListener('click', () => setCols(2));
-    $('btnCols4').addEventListener('click', () => setCols(4));
+    COL_CHOICES.forEach(c => { const b = $('btnCols' + c); if (b) b.addEventListener('click', () => setCols(c)); });
     const ICON_EYE = '<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.46 12C3.73 7.94 7.52 5 12 5s8.27 2.94 9.54 7c-1.27 4.06-5.06 7-9.54 7s-8.27-2.94-9.54-7z"></path></svg>';
     const ICON_STOP = '<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.36 18.36A9 9 0 005.64 5.64m12.72 12.72L5.64 5.64"></path></svg>';
     const CLS_ON = 'bg-bad/20 text-bad border border-bad text-xs font-semibold px-3 py-2 rounded-md transition-colors flex items-center gap-1.5 whitespace-nowrap';

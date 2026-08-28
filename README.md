@@ -14,7 +14,9 @@ Tabbed terminals, a built-in SFTP client, a live server dashboard, a broadcast g
 
 </div>
 
-![SSHell](docs/screenshot.png)
+---
+
+![SSHell — grid dashboard with live server metrics](docs/screenshot.png)
 
 ## Features
 
@@ -43,7 +45,7 @@ It is **not** a defense against malware already running as your user — like an
 
 Grab the latest build from the [Releases](https://github.com/kaikesouthier/sshell/releases) page:
 
-- **Windows** — `SSHell-<version>-x64.exe` (installer) or the portable build.
+- **Windows** — `SSHell-<version>-x64-setup.exe` (installer) or `SSHell-<version>-x64-portable.exe` (no install).
 - **Linux** — `SSHell-<version>-x64.AppImage` or the `.deb`.
 
 ## Build from source

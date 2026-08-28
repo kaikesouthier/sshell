@@ -26,11 +26,9 @@ function openConfig() {
 function wipeRevealed() {
     const body = $('cfgPwTable');
     if (!body) return;
-    body.querySelectorAll('[data-secret]').forEach(el => {
-        el.dataset.secret = '';
-        el.removeAttribute('data-secret');
-        el.textContent = '';
-    });
+    // Overwrite any row left revealed before tearing the table down, so a shown
+    // secret never lingers in a detached node.
+    body.querySelectorAll('.pw-val').forEach(el => { el.textContent = ''; el.dataset.shown = '0'; });
     body.innerHTML = '';
 }
 
@@ -96,14 +94,13 @@ function renderPwTable() {
     if (!rows.length) { body.innerHTML = `<tr><td colspan="4" class="px-2.5 py-6 text-center text-faint">No servers${q ? ' match' : ''}.</td></tr>`; return; }
     body.innerHTML = rows.map(s => {
         const isKey = s.authType === 'key';
-        const secret = isKey ? (s.keyPath || '(no key path)') : (s.password || '(empty)');
         return `<tr class="border-t border-edge/50" data-id="${escapeHtml(s.id)}">
             <td class="px-2.5 py-1.5 text-txt/90 font-medium">${escapeHtml(s.label || s.host)}</td>
             <td class="px-2.5 py-1.5 font-mono text-muted">${escapeHtml(s.host)}${s.port && s.port !== 22 ? ':' + s.port : ''}</td>
             <td class="px-2.5 py-1.5 font-mono text-muted">${escapeHtml(s.username)}</td>
             <td class="px-2.5 py-1.5">
                 <div class="flex items-center gap-1.5">
-                    <span class="pw-val font-mono text-txt/90 truncate max-w-[180px]" data-secret="${escapeHtml(secret)}">••••••••</span>
+                    <span class="pw-val font-mono text-txt/90 truncate max-w-[180px]" data-shown="0">••••••••</span>
                     <button class="pw-eye text-faint hover:text-accent shrink-0" title="Show/hide"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.46 12C3.73 7.94 7.52 5 12 5s8.27 2.94 9.54 7c-1.27 4.06-5.06 7-9.54 7s-8.27-2.94-9.54-7z"></path></svg></button>
                     <button class="pw-copy text-faint hover:text-accent shrink-0" title="Copy"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-2M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2"></path></svg></button>
                     ${isKey ? '<span class="text-[9px] text-faint uppercase tracking-wide">key</span>' : ''}
@@ -111,16 +108,28 @@ function renderPwTable() {
             </td>
         </tr>`;
     }).join('');
+    // The secret is looked up from the store only when the user actually reveals
+    // or copies that one row, so at rest not a single password sits in the DOM —
+    // even after the master-passphrase gate has been passed.
     body.querySelectorAll('.pw-eye').forEach(btn => btn.addEventListener('click', () => {
-        const span = btn.closest('tr').querySelector('.pw-val');
-        if (span.dataset.shown === '1') { span.textContent = '••••••••'; span.dataset.shown = '0'; }
-        else { span.textContent = span.dataset.secret; span.dataset.shown = '1'; }
+        const tr = btn.closest('tr');
+        const span = tr.querySelector('.pw-val');
+        if (span.dataset.shown === '1') { span.textContent = '••••••••'; span.dataset.shown = '0'; return; }
+        const s = S.getSession(tr.dataset.id);
+        if (!s) return;
+        span.textContent = secretOf(s);
+        span.dataset.shown = '1';
     }));
     body.querySelectorAll('.pw-copy').forEach(btn => btn.addEventListener('click', () => {
-        const span = btn.closest('tr').querySelector('.pw-val');
-        clipboard.writeText(span.dataset.secret);
+        const s = S.getSession(btn.closest('tr').dataset.id);
+        if (!s) return;
+        clipboard.writeText(secretOf(s));
         dialog.notify('Copied to clipboard.', { kind: 'success', title: 'Copied' });
     }));
+}
+
+function secretOf(s) {
+    return s.authType === 'key' ? (s.keyPath || '(no key path)') : (s.password || '(empty)');
 }
 
 function init() {

@@ -37,7 +37,7 @@ function renderMonitor(m) {
         `<span class="flex items-center gap-1.5 shrink-0">${icon('host', 'text-ok')}<span class="font-semibold text-txt">${escapeHtml(m.host)}</span></span>` + DIV +
         metric('cpu', 'text-faint', `<span class="${cpuCls}">${cpu}</span>`) + DIV +
         metric('ram', 'text-faint', `<span class="text-txt/90">${ram}</span>`) + DIV +
-        metric('net', 'text-faint', `<span class="text-ok">↓${down}</span> <span class="text-accent">↑${up}</span> <span class="text-faint">Mb/s</span>`) + DIV +
+        metric('net', 'text-faint', `<span class="text-accent">↑${up}</span> <span class="text-ok">↓${down}</span> <span class="text-faint">Mb/s</span>`) + DIV +
         metric('clock', 'text-faint', `<span class="text-txt/90">${escapeHtml(m.uptime || '—')}</span>`) + DIV +
         metric('users', 'text-faint', `<span class="text-txt/90">${m.userCount != null ? m.userCount : '—'}</span>${m.users ? ` <span class="text-muted">(${escapeHtml(m.users)})</span>` : ''}`) + DIV +
         metric('disk', 'text-faint', `<span class="${diskCls}">${disk}</span>`);
