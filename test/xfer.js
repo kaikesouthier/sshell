@@ -270,18 +270,23 @@ t('tearing down a tab that never used SFTP is safe', () => {
 
 const sftpSrc = fs.readFileSync(path.join(ROOT, 'src/sftp.js'), 'utf8');
 
-t('the file browser opens its channel on the transfer connection', () => {
+// Browsing is tiny and must feel instant, so it rides the session's own
+// connection; only the heavy transfers pay for a second one.
+t('the file browser opens its channel on the shared session connection', () => {
     const i = sftpSrc.indexOf('function ensureSftp');
     const fn = sftpSrc.slice(i, i + 2200);
-    return /xfer\.clientFor\(tab,/.test(fn) && !/tab\.client\.sftp\(/.test(fn);
+    return /tab\.client\.sftp\(/.test(fn) && !/xfer\.clientFor\(/.test(fn);
 });
-t('each transfer opens its channel on the transfer connection', () => {
+t('each transfer opens its channel on the dedicated transfer connection', () => {
     const i = sftpSrc.indexOf('function openTransferChannel');
     const fn = sftpSrc.slice(i, i + 1400);
     return /xfer\.clientFor\(tab,/.test(fn) && !/tab\.client\.sftp\(/.test(fn);
 });
-t('nothing opens SFTP on the shell connection any more', () =>
-    !/tab\.client\.sftp\(/.test(sftpSrc));
+t('only browsing rides the shell connection, never a transfer', () => {
+    const i = sftpSrc.indexOf('function openTransferChannel');
+    const fn = sftpSrc.slice(i, i + 1400);
+    return !/tab\.client\.sftp\(/.test(fn);
+});
 t('a dedicated connection gets the full ssh2 throughput', () => {
     const m = /const XFER_OWN = \{ concurrency: (\d+),/.exec(sftpSrc);
     return !!m && Number(m[1]) === 64;
