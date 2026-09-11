@@ -21,6 +21,7 @@ const SECTIONS = [
             { keys: [['Ctrl', 'R']], text: 'Reconnect — works even when the session is healthy' },
             { keys: [['Ctrl', 'Shift', 'R']], text: 'Reset the terminal — fixes garbled output after dumping a binary file' },
             { keys: [['Ctrl', 'E']], text: 'Edit this session' },
+            { keys: [['Ctrl', 'Wheel']], text: 'Zoom the text of this terminal — the size you land on is the default for new terminals' },
             { note: 'A shell would normally use Ctrl+R for reverse history search and Ctrl+E to jump to end of line. SSHell takes both, so they no longer reach the remote shell.' }
         ]
     },
@@ -60,7 +61,8 @@ const SECTIONS = [
             { keys: [['Ctrl', 'Shift', 'Drag']], text: 'Add to the selected panes' },
             { mouse: 'Drag a pane header', text: 'Move that pane' },
             { mouse: 'Drag an edge or corner', text: 'Resize that pane' },
-            { mouse: 'Wheel', text: 'Zoom about the cursor' },
+            { mouse: 'Wheel', text: 'Zoom the canvas about the cursor — over a pane it scrolls that terminal' },
+            { keys: [['Ctrl', 'Wheel']], text: 'Over a pane: zoom the text of that pane only, in Columns or Free Layout' },
             { keys: [['Shift', 'Wheel']], text: 'Scroll sideways' },
             { keys: [['+'], ['−'], ['0']], text: 'Zoom in, out, reset' },
             { note: 'Free Layout unlocks the canvas; Recenter re-flows the panes into a grid and brings them back into view; Columns returns to the fixed view. The canvas is endless and each pane remembers where you put it.' }

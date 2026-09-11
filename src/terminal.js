@@ -4,14 +4,6 @@ const { clipboard } = require('electron');
 const { Terminal } = require('xterm');
 const { FitAddon } = require('xterm-addon-fit');
 
-// True when the grid canvas is showing at anything other than 1:1.
-function canvasZoomed() {
-    try {
-        const g = require('./tabs').activeGrid();
-        return !!g && g.getMode() === 'free' && Math.abs(g.getZoom() - 1) > 0.001;
-    } catch (e) { return false; }
-}
-
 function newTerminal(fontSize) {
     const theme = require('./theme');
     const term = new Terminal({
@@ -23,11 +15,9 @@ function newTerminal(fontSize) {
 
     term.onSelectionChange(() => {
         try {
-            // xterm maps pointer position to a cell using screen pixels against
-            // unscaled CSS metrics, so on a zoomed canvas the selection is not
-            // the text under the cursor. Copying it would silently put the wrong
-            // content on the clipboard.
-            if (canvasZoomed()) return;
+            // Selection is accurate at every grid zoom now that the canvas uses
+            // the CSS `zoom` property (see applyZoom in grid.js), so a selection
+            // always maps to the text under the cursor and is safe to copy.
             const sel = term.getSelection();
             if (sel) clipboard.writeText(sel);
         } catch (e) { require('./errors').record('clipboard', e, 'selection copy'); }

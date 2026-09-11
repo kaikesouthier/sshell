@@ -329,17 +329,55 @@ function moveTab(dragId, beforeId) {
     renderTabBar();
 }
 
+const FONT_MIN = 8, FONT_MAX = 40, FONT_DEFAULT = 13;
+
+function termFontSize() {
+    const n = Number(require('./config').data.termFontSize);
+    return n >= FONT_MIN && n <= FONT_MAX ? Math.round(n) : FONT_DEFAULT;
+}
+
+let fontSaveTimer = null;
+// Resizes one terminal only — the one under the cursor — so a grid can mix
+// sizes. The size it lands on becomes the default for terminals opened later,
+// and survives restarts.
+function setTermFontSize(tab, px) {
+    if (!tab || !tab.term) return termFontSize();
+    const cur = Number(tab.term.options.fontSize) || termFontSize();
+    const next = Math.max(FONT_MIN, Math.min(FONT_MAX, Math.round(px)));
+    if (next === cur) return next;
+    errors.attempt(() => { tab.term.options.fontSize = next; }, 'font size');
+    // xterm re-measures the glyphs on the option change; fit after that lands.
+    // A pane inside a grid is fit by the grid itself (see its wheel handler).
+    requestAnimationFrame(() => { if (tab.id === RT.activeTabId) fitTerminalTab(tab); });
+    const config = require('./config');
+    config.data.termFontSize = next;
+    clearTimeout(fontSaveTimer);
+    fontSaveTimer = setTimeout(() => { fontSaveTimer = null; errors.attempt(() => config.save(), 'font size save'); }, 500);
+    return next;
+}
+
 function buildTerminalView(tab) {
     const el = document.createElement('div');
     el.className = 'term-view'; el.style.display = 'none';
     $('views').appendChild(el);
     tab.el = el;
 
-    const term = terminal.newTerminal(13);
+    const term = terminal.newTerminal(termFontSize());
     const fitAddon = new terminal.FitAddon();
     term.loadAddon(fitAddon);
     term.open(el);
     tab.term = term; tab.fitAddon = fitAddon;
+
+    // Ctrl+wheel (and a trackpad pinch, which Chromium reports the same way)
+    // resizes the text. Capture phase, so xterm's own wheel handler never also
+    // scrolls the buffer, and preventDefault keeps Chromium from zooming the
+    // whole window instead.
+    el.addEventListener('wheel', e => {
+        if (!e.ctrlKey || e.altKey) return;
+        e.preventDefault(); e.stopPropagation();
+        if (!e.deltaY) return;
+        setTermFontSize(tab, (Number(term.options.fontSize) || termFontSize()) + (e.deltaY < 0 ? 1 : -1));
+    }, { passive: false, capture: true });
 
     term.element.addEventListener('contextmenu', e => {
         e.preventDefault();
@@ -553,5 +591,6 @@ function init() {
 
 module.exports = {
     openTerminalTab, openGridTab, openToolTab, setActiveTab, closeTab, renderTabBar,
-    buildTerminalView, fitTerminalTab, connectTerminalTab, reconnectTab, resetTerminal, activeGrid, tabByOffset, tabByNumber, openTabs, init
+    buildTerminalView, fitTerminalTab, connectTerminalTab, reconnectTab, resetTerminal, activeGrid, tabByOffset, tabByNumber, openTabs, init,
+    termFontSize, setTermFontSize
 };

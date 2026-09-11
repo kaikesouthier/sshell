@@ -536,7 +536,7 @@ async function downloadSelected(dir) {
             if (t.cancelled) { closeChannel(ch); return finishTransfer(t, null); }
             t.channel = ch;
             withRetry('fastGet ' + entry.name,
-                done => ch.fastGet(t.remote, local, xferOpts(ch, (tr, c, to) => stepTransfer(t, tr, to)), done),
+                guardedAttempt(t, ch, done => ch.fastGet(t.remote, local, xferOpts(ch, (tr, c, to) => stepTransfer(t, tr, to)), done)),
                 e => {
                     finishTransfer(t, e);
                     if (e && !wasCancelled(t)) noteUploadError(entry.name, e);
@@ -791,11 +791,11 @@ async function downloadEntry(entry, dir) {
     t.tab = tab; t.local = res.filePath; t.remote = pjoin(dir, entry.name);
 
     openTransferChannel(tab, (err, ch) => {
-        if (err) { finishTransfer(t, err); return dialog.notify(errors.describe(err), { kind: 'error', title: 'SFTP error' }); }
+        if (err) { finishTransfer(t, err); if (!wasCancelled(t)) dialog.notify(errors.describe(err), { kind: 'error', title: 'SFTP error' }); return; }
         if (t.cancelled) { closeChannel(ch); return finishTransfer(t, null); }
         t.channel = ch;
         withRetry('fastGet ' + entry.name,
-            done => ch.fastGet(t.remote, t.local, xferOpts(ch, (tr, c, to) => stepTransfer(t, tr, to)), done),
+            guardedAttempt(t, ch, done => ch.fastGet(t.remote, t.local, xferOpts(ch, (tr, c, to) => stepTransfer(t, tr, to)), done)),
             e => {
                 finishTransfer(t, e);
                 if (e && !wasCancelled(t)) {
@@ -825,18 +825,27 @@ function openWithEditor(entry, dir) {
     const bucket = require('crypto').createHash('sha1').update(dir).digest('hex').slice(0, 8);
     const local = path.join(tmpDir, bucket + '-' + safeName);
 
+    // A file opened earlier is still watched for save-back, and its local copy
+    // dates from that moment — so reopening it showed what the server had back
+    // then, and anything changed there since (another user, a deploy, a cron
+    // job) stayed invisible until the watch expired. Fetch a fresh copy every
+    // time, unless local edits are still on their way up: a new download would
+    // land on top of them and the watcher would push the old contents back.
     const existing = (tab._watchers || []).find(w => w.remote === remote);
-    if (existing) { existing.ttl = restartTtl(existing); openLocalFile(local); return; }
+    if (existing) {
+        if (existing.debounce || existing.uploading || existing.pending) { existing.ttl = restartTtl(existing); openLocalFile(local); return; }
+        existing.drop();
+    }
 
     const t = addTransfer(entry.name, 'down', entry.size);
     t.tab = tab; t.local = local; t.remote = remote;
 
     openTransferChannel(tab, (chErr, ch) => {
-        if (chErr) { finishTransfer(t, chErr); return dialog.notify(errors.describe(chErr), { kind: 'error', title: 'SFTP error' }); }
+        if (chErr) { finishTransfer(t, chErr); if (!wasCancelled(t)) dialog.notify(errors.describe(chErr), { kind: 'error', title: 'SFTP error' }); return; }
         if (t.cancelled) { closeChannel(ch); return finishTransfer(t, null); }
         t.channel = ch;
         withRetry('fastGet ' + entry.name,
-            done => ch.fastGet(remote, local, xferOpts(ch, (tr, c, to) => stepTransfer(t, tr, to)), done),
+            guardedAttempt(t, ch, done => ch.fastGet(remote, local, xferOpts(ch, (tr, c, to) => stepTransfer(t, tr, to)), done)),
             async e => {
                 finishTransfer(t, e);
                 if (wasCancelled(t)) return;
@@ -941,6 +950,7 @@ function watchAndReupload(tab, local, remote, name) {
         // the failure dialog points the user at this exact path.
         if (!rec.uploading && !rec.pending) { try { fs.unlinkSync(local); } catch (e) {} }
     };
+    rec.drop = drop;
     rec.expire = () => {
         if (rec.uploading || rec.pending) { restartTtl(rec); return; }
         drop();
@@ -966,18 +976,16 @@ function watchAndReupload(tab, local, remote, name) {
             if (err) {
                 rec.uploading = false;
                 finishTransfer(t, err);
-                dialog.notify('Could not upload your changes to ' + name + ':\n\n' + errors.describe(err), { kind: 'error', title: 'Save failed' });
+                if (!wasCancelled(t)) dialog.notify('Could not upload your changes to ' + name + ':\n\n' + errors.describe(err), { kind: 'error', title: 'Save failed' });
                 return;
             }
             if (t.cancelled) { closeChannel(sftp); rec.uploading = false; return finishTransfer(t, null); }
             t.channel = sftp;
             withRetry('fastPut ' + name,
-                done => {
-                    let called = false;
-                    const once = e => { if (called) return; called = true; done(e); };
-                    try { t.wrote = true; sftp.fastPut(local, remote, xferOpts(sftp, (tr, ch, to) => stepTransfer(t, tr, to)), once); }
-                    catch (e) { once(e); }
-                },
+                guardedAttempt(t, sftp, done => {
+                    t.wrote = true;
+                    sftp.fastPut(local, remote, xferOpts(sftp, (tr, ch, to) => stepTransfer(t, tr, to)), done);
+                }),
                 e => {
                     finishTransfer(t, e);
                     rec.uploading = false;
@@ -1090,16 +1098,14 @@ function uploadFile(localPath, remotePath, tab) {
         t.tab = tab; t.local = localPath; t.remote = remotePath;
 
         openTransferChannel(tab, (err, ch) => {
-            if (err) { finishTransfer(t, err); noteUploadError(pbase(remotePath), err); return done(); }
+            if (err) { finishTransfer(t, err); if (!wasCancelled(t)) noteUploadError(pbase(remotePath), err); return done(); }
             if (t.cancelled) { closeChannel(ch); finishTransfer(t, null); return done(); }
             t.channel = ch;
             withRetry('fastPut ' + remotePath,
-                cb => {
-                    let called = false;
-                    const once = e => { if (called) return; called = true; cb(e); };
-                    try { t.wrote = true; ch.fastPut(localPath, remotePath, xferOpts(ch, (tr, c, to) => stepTransfer(t, tr, to)), once); }
-                    catch (e) { once(e); }
-                },
+                guardedAttempt(t, ch, cb => {
+                    t.wrote = true;
+                    ch.fastPut(localPath, remotePath, xferOpts(ch, (tr, c, to) => stepTransfer(t, tr, to)), cb);
+                }),
                 e => {
                     finishTransfer(t, e);
                     if (e && !wasCancelled(t)) noteUploadError(pbase(remotePath), e);
@@ -1160,8 +1166,8 @@ let xferSeq = 1;
 function addTransfer(name, dir, total) {
     const t = {
         id: xferSeq++, name, dir, total: total || 0, done: 0, speed: 0, status: 'active',
-        cancelled: false, channel: null, tab: null, local: null, remote: null,
-        _lastBytes: 0, _lastTime: Date.now()
+        cancelled: false, finished: false, settle: null, channel: null, tab: null, local: null, remote: null,
+        _lastBytes: 0, _lastTime: Date.now(), _cancelTimer: null
     };
     transfers.push(t); renderTransfers(); return t;
 }
@@ -1185,6 +1191,36 @@ const XFER_OWN = { concurrency: 64, chunkSize: 32768 };
 const XFER_SHARED = { concurrency: 16, chunkSize: 32768 };
 function xferOpts(ch, step) {
     return Object.assign({}, ch && ch._sshellXfer ? XFER_OWN : XFER_SHARED, { step });
+}
+
+// How long a cancel waits for the server to acknowledge the closed channel
+// before the transfer is settled locally regardless.
+const CANCEL_GRACE_MS = 3000;
+
+// ssh2 only calls fastGet/fastPut back once the server answers. A request left
+// pending when the socket dies, or issued on a channel that is already
+// closing, is kept forever and never called back — so a transfer cut off by a
+// dropped connection froze at its last percentage, and Cancel then left it on
+// "cancelling…" for good. Settle the attempt from the channel's own close
+// instead; the cancel watchdog covers a dead connection that never sends one.
+// `owner` is the transfer record (or putFile's handle): its `cancelled` flag
+// decides whether the close counts as a failure, and `settle` lets the
+// watchdog force the attempt to finish.
+function guardedAttempt(owner, ch, fn) {
+    return done => {
+        let called = false;
+        const once = e => {
+            if (called) return; called = true;
+            try { ch.removeListener('close', onClose); } catch (err) {}
+            if (owner.settle === once) owner.settle = null;
+            done(e);
+        };
+        const onClose = () => once(owner.cancelled ? null : new Error('The connection was closed before the transfer finished.'));
+        if (owner.cancelled) return once(null);
+        owner.settle = once;
+        try { ch.once('close', onClose); } catch (e) {}
+        try { fn(once); } catch (e) { once(e); }
+    };
 }
 
 function openTransferChannel(tab, cb) {
@@ -1262,8 +1298,13 @@ function cancelTransfer(id) {
     t.speed = 0;
     renderTransfers();
     closeChannel(t.channel);
-    // fastGet/fastPut will now call back with an error; finishTransfer sees the
-    // cancelled flag and removes the partial.
+    // fastGet/fastPut call back with an error once the server acknowledges the
+    // close; finishTransfer sees the cancelled flag and removes the partial. A
+    // dead connection never acknowledges, so stop waiting for it.
+    t._cancelTimer = setTimeout(() => {
+        t._cancelTimer = null;
+        if (t.settle) t.settle(null); else finishTransfer(t, null);
+    }, CANCEL_GRACE_MS);
 }
 
 function cancelAllTransfers() { transfers.slice().forEach(t => cancelTransfer(t.id)); }
@@ -1272,7 +1313,12 @@ function stepTransfer(t, transferred, total) {
     const now = Date.now(), dt = now - t._lastTime;
     if (dt >= 250) { t.speed = (transferred - t._lastBytes) / (dt / 1000); t._lastBytes = transferred; t._lastTime = now; renderTransfers(); }
 }
+// Idempotent: the same transfer can be settled by its callback, its channel's
+// close and the cancel watchdog, in any order.
 function finishTransfer(t, err) {
+    if (t.finished) return;
+    t.finished = true;
+    clearTimeout(t._cancelTimer); t._cancelTimer = null;
     closeChannel(t.channel);
     t.channel = null;
     if (t.cancelled) {
@@ -1410,14 +1456,23 @@ function init() {
 // Returns a handle the caller can abort. Runs on its own channel so cancelling
 // one server's transfer leaves the others running.
 function putFile(tab, localPath, remotePath, onProgress, cb) {
-    const handle = { cancelled: false, channel: null, cancel: null };
+    const handle = { cancelled: false, finished: false, settle: null, channel: null, cancel: null, _cancelTimer: null };
     handle.cancel = () => {
         if (handle.cancelled) return;
         handle.cancelled = true;
         closeChannel(handle.channel);
+        // Same watchdog as cancelTransfer: a dead connection never acknowledges
+        // the close, and the grid must not wait on it forever.
+        handle._cancelTimer = setTimeout(() => {
+            handle._cancelTimer = null;
+            if (handle.settle) handle.settle(null);
+        }, CANCEL_GRACE_MS);
     };
 
     const finish = e => {
+        if (handle.finished) return;
+        handle.finished = true;
+        clearTimeout(handle._cancelTimer); handle._cancelTimer = null;
         closeChannel(handle.channel);
         handle.channel = null;
         if (handle.cancelled) {
@@ -1443,16 +1498,12 @@ function putFile(tab, localPath, remotePath, onProgress, cb) {
         if (handle.cancelled) { closeChannel(ch); return finish(null); }
         handle.channel = ch;
         withRetry('fastPut ' + remotePath,
-            done => {
-                let called = false;
-                const once = e => { if (called) return; called = true; done(e); };
-                try {
-                    handle.wrote = true;
-                    ch.fastPut(localPath, remotePath,
-                        xferOpts(ch, (transferred, chunk, total) => { if (onProgress) onProgress(transferred, total); }),
-                        once);
-                } catch (e) { once(e); }
-            },
+            guardedAttempt(handle, ch, done => {
+                handle.wrote = true;
+                ch.fastPut(localPath, remotePath,
+                    xferOpts(ch, (transferred, chunk, total) => { if (onProgress) onProgress(transferred, total); }),
+                    done);
+            }),
             finish, 4, alive(tab));
     });
 

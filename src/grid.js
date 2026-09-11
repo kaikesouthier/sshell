@@ -143,6 +143,7 @@ function applyMode(state) {
         w.className = WRAP_BASE + WRAP_COLUMNS;
         l.className = 'grid gap-1 content-start';
         l.style.transform = '';
+        l.style.zoom = '';
         l.style.width = '';
         l.style.height = '';
         applyColumns(state);
@@ -164,12 +165,42 @@ function applyColumns(state) {
 
 const clampZoom = z => Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, z));
 
+// Zoom resizes the panes rather than CSS-scaling their content. A CSS scale
+// (transform OR the zoom property, both identical here) renders each terminal
+// row at a scaled height while xterm keeps measuring the unscaled one, so a
+// click mapped to the wrong row — selection was only ever correct at 100%.
+// Instead each pane's box is drawn at canvas * zoom (see applyRect) and its
+// terminal is re-fit to that box at 1:1, so text is crisp and selection exact
+// at every level. Every canvas coordinate still relates to the screen as
+// screen = canvas * zoom, so the pan/scroll/drag/arrange math is unchanged.
 function applyZoom(state) {
     if (state.mode !== 'free') return;
-    state.layer.style.transformOrigin = '0 0';
-    state.layer.style.transform = 'scale(' + state.zoom + ')';
+    state.layer.style.transform = '';
+    state.layer.style.zoom = '';
+    state.cells.forEach((els, tabId) => applyRect(state, tabId));
     growCanvas(state);
+    scheduleZoomFit(state);
     updateZoomReadout(state);
+}
+
+// Same coalescing for a text-size change on one pane: every wheel tick
+// re-measures the glyphs, but only the last one needs to reach the PTY.
+function scheduleFontFit(state, tabId) {
+    state._fontFit = state._fontFit || new Map();
+    clearTimeout(state._fontFit.get(tabId));
+    state._fontFit.set(tabId, setTimeout(() => {
+        state._fontFit.delete(tabId);
+        if (state.cells.has(tabId)) fitTab(state, tabId, true);
+    }, 140));
+}
+
+// Re-fitting a terminal resizes the remote PTY (SIGWINCH), so coalesce the fits
+// to the end of a zoom gesture rather than firing on every wheel tick.
+function scheduleZoomFit(state) {
+    clearTimeout(state._zoomFitTimer);
+    state._zoomFitTimer = setTimeout(() => {
+        state.cells.forEach((els, tabId) => fitTab(state, tabId, true));
+    }, 140);
 }
 
 // Zoom about a screen point — without this the canvas slides away from whatever
@@ -191,8 +222,8 @@ function zoomAt(state, factor, clientX, clientY) {
     const wantY = Math.max(0, cy * next - py);
 
     state.zoom = next;
-    state.layer.style.transformOrigin = '0 0';
-    state.layer.style.transform = 'scale(' + next + ')';
+    // Redraw every pane at the new scale (geometry, not a CSS transform).
+    state.cells.forEach((els, tabId) => applyRect(state, tabId));
 
     // Extend the scroll area to cover the target offset BEFORE assigning it.
     ensureExtent(state, wantX + w.clientWidth, wantY + w.clientHeight);
@@ -200,6 +231,7 @@ function zoomAt(state, factor, clientX, clientY) {
 
     w.scrollLeft = wantX;
     w.scrollTop = wantY;
+    scheduleZoomFit(state);
     updateZoomReadout(state);
     saveZoomSoon(state);
 }
@@ -300,10 +332,13 @@ function applyRect(state, tabId) {
     const els = state.cells.get(tabId);
     if (!els || !els.cell || state.mode !== 'free') return;
     const r = getRect(state, tabId);
-    els.cell.style.left = r.x + 'px';
-    els.cell.style.top = r.y + 'px';
-    els.cell.style.width = r.w + 'px';
-    els.cell.style.height = r.h + 'px';
+    // Rects are stored in unscaled canvas coordinates; the pane is drawn at
+    // canvas * zoom so the terminal inside renders 1:1 at the scaled size.
+    const z = state.zoom || 1;
+    els.cell.style.left = (r.x * z) + 'px';
+    els.cell.style.top = (r.y * z) + 'px';
+    els.cell.style.width = (r.w * z) + 'px';
+    els.cell.style.height = (r.h * z) + 'px';
 }
 
 // The canvas is effectively endless: it always extends a full screen beyond the furthest pane and beyond wherever you have scrolled, so there is…
@@ -412,8 +447,26 @@ function attachCanvasNavigation(state) {
         });
     });
 
-    // Wheel zooms about the cursor. Shift/middle-drag remain for panning, and
-    // the scrollbars still work for anyone who prefers them.
+    // Ctrl+wheel over a pane resizes that pane's text only, in both layouts.
+    // Capture phase: xterm's own wheel handler sits on the pane and stops the
+    // event before it would ever bubble up to this element.
+    w.addEventListener('wheel', e => {
+        if (!e.ctrlKey || e.altKey) return;
+        const onTerm = e.target && e.target.closest && e.target.closest('.xterm');
+        const cell = onTerm && e.target.closest('.grid-cell');
+        if (!cell || !cell.dataset.tabId) return;
+        e.preventDefault(); e.stopPropagation();
+        if (!e.deltaY) return;
+        const t = RT.tabs.find(x => x.id === cell.dataset.tabId);
+        if (!t || !t.term) return;
+        const tabs = tabsMod();
+        tabs.setTermFontSize(t, (Number(t.term.options.fontSize) || tabs.termFontSize()) + (e.deltaY < 0 ? 1 : -1));
+        scheduleFontFit(state, t.id);
+    }, { passive: false, capture: true });
+
+    // Wheel over the background zooms the canvas about the cursor. Shift and
+    // middle-drag remain for panning, and the scrollbars still work for anyone
+    // who prefers them.
     w.addEventListener('wheel', e => {
         if (state.mode !== 'free') return;
         // Zooming mid-drag rewrites scrollLeft and the zoom factor underneath a gesture whose origin was captured at the old values, which flung the pane…
@@ -426,8 +479,8 @@ function attachCanvasNavigation(state) {
             return;
         }
         // Over a terminal, the wheel belongs to that pane's scrollback — there
-        // is otherwise no way to reach it in free mode. Ctrl+wheel still zooms.
-        if (!e.ctrlKey && e.target && e.target.closest && e.target.closest('.xterm')) return;
+        // is otherwise no way to reach it in free mode.
+        if (e.target && e.target.closest && e.target.closest('.xterm')) return;
 
         e.preventDefault();
         const dir = e.deltaY < 0 ? 1 : -1;
@@ -616,8 +669,9 @@ function applyDragFrame() {
         r.y = Math.max(0, snap(orig.y + dy));
         d.pending = r;
         // Compositor-only: no layout, no paint of the terminal underneath. The
-        // real left/top is written once, on release.
-        els.cell.style.transform = 'translate3d(' + (r.x - orig.x) + 'px,' + (r.y - orig.y) + 'px,0)';
+        // real left/top is written once, on release. The layer is no longer
+        // CSS-scaled, so the canvas delta is turned into a screen delta here.
+        els.cell.style.transform = 'translate3d(' + ((r.x - orig.x) * z) + 'px,' + ((r.y - orig.y) * z) + 'px,0)';
         growCanvasFast(state, r, d);
         return;
     }
