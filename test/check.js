@@ -7,6 +7,10 @@ for (const f of fs.readdirSync('views')) {
 for (const m of fs.readFileSync('index.html','utf8').matchAll(/\bid="([^"]+)"/g)) ids.add(m[1]);
 
 const files=['app.js',...fs.readdirSync('src').map(f=>'src/'+f)];
+for (const f of files) {
+  for (const m of fs.readFileSync(f,'utf8').matchAll(/\bid="([^"{}]+)"/g)) ids.add(m[1]);
+}
+
 const miss=[];
 for (const f of files) {
   const t=fs.readFileSync(f,'utf8');

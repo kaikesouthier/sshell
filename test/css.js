@@ -31,7 +31,10 @@ const addToken = c => {
 };
 for (const f of files) {
     const t = fs.readFileSync(path.join(ROOT, f), 'utf8');
-    for (const m of t.matchAll(/class="([^"$]*)"/g)) m[1].split(/\s+/).forEach(addToken);
+    const consts = new Map();
+    for (const m of t.matchAll(/const ([A-Za-z_$][\w$]*)\s*=\s*'([^']*)'/g)) consts.set(m[1], m[2]);
+    const resolve = v => v.replace(/\$\{([A-Za-z_$][\w$]*)\}/g, (whole, name) => consts.has(name) ? consts.get(name) : ' ');
+    for (const m of t.matchAll(/class="([^"]*)"/g)) resolve(m[1]).split(/\s+/).forEach(addToken);
     for (const m of t.matchAll(/classList\.(?:add|remove|toggle)\(([^)]*)\)/g)) {
         for (const s of m[1].matchAll(/'([^']+)'/g)) s[1].split(/\s+/).forEach(addToken);
     }

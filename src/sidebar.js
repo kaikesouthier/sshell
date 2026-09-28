@@ -317,8 +317,11 @@ function renderSessionRow(s, depth) {
     item.className = 'sess-item group flex items-center gap-2.5 pr-1.5 py-2 rounded-md cursor-pointer transition-colors ' +
         (selected ? 'is-selected' : 'hover:bg-panel2');
     item.style.paddingLeft = (indentFor(depth) + 4) + 'px';
-    const avatar = s.icon
-        ? icons.iconSvg(s.icon, s.iconColor || 'txt', 'w-5 h-5')
+    // No icon chosen: show the OS this session was detected as, rather than the
+    // same generic box for every host.
+    const shown = s.icon || icons.iconForOs(s.os);
+    const avatar = shown
+        ? icons.iconSvg(shown, s.iconColor || 'txt', 'w-5 h-5')
         : `<span class="text-[11px] font-bold text-txt/70 uppercase">${escapeHtml((s.label || s.host || '?').slice(0, 2))}</span>`;
 
     const subtitle = s.os ? escapeHtml(s.os) : escapeHtml(s.username || '');

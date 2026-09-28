@@ -272,6 +272,39 @@ function writeInput(tab, data) {
     errors.safeWrite(s, data);
 }
 
+// A clipboard line ends with CRLF on Windows and LF elsewhere, but a terminal
+// wants one CR per line: sending the pair made the shell see two newlines and
+// run an empty command between every pasted line.
+function normalizePaste(text) {
+    return String(text == null ? '' : text).replace(/\r?\n/g, '\r');
+}
+
+// Bracketed paste brackets the text so the far side knows it was pasted rather
+// than typed — tmux and editors then take it as literal input instead of
+// auto-indenting it or acting on each line as it arrives. Only wrap it when the
+// program running there actually asked for the mode.
+function pasteText(tab, text) {
+    const data = normalizePaste(text);
+    if (!data || !tab || !tab.stream) return;
+    const on = !!(tab.term && tab.term.modes && tab.term.modes.bracketedPasteMode);
+    writeInput(tab, on ? '\x1b[200~' + data + '\x1b[201~' : data);
+}
+
+// xterm's size and the remote PTY's size have to change together. Resizing the
+// terminal without telling the far side leaves a full-screen program (tmux,
+// vim, htop) drawing for the old geometry: it gets no SIGWINCH, so it never
+// repaints, and its status line sits on a row the terminal no longer shows.
+// Sending only real changes keeps this safe to call after every fit.
+function syncWindow(tab) {
+    if (!tab || !tab.term || !tab.stream || typeof tab.stream.setWindow !== 'function') return;
+    const rows = tab.term.rows, cols = tab.term.cols;
+    if (!(rows > 0 && cols > 0)) return;
+    const last = tab._win;
+    if (last && last.rows === rows && last.cols === cols) return;
+    tab._win = { rows, cols };
+    try { tab.stream.setWindow(rows, cols, 0, 0); } catch (e) { errors.record('setWindow', e, tab.title); }
+}
+
 // end() flushes what is still queued before closing, which is exactly the
 // replay above. Anything being torn down should discard instead.
 function killStream(s) {
@@ -381,8 +414,7 @@ function buildTerminalView(tab) {
 
     term.element.addEventListener('contextmenu', e => {
         e.preventDefault();
-        const t = clipboard.readText();
-        if (t && tab.stream) tab.stream.write(t);
+        pasteText(tab, clipboard.readText());
     });
 
     const ro = new ResizeObserver(() => { if (tab.id === RT.activeTabId) requestAnimationFrame(() => fitTerminalTab(tab)); });
@@ -394,7 +426,7 @@ function fitTerminalTab(tab) {
     if (!tab.fitAddon || !tab.term || !tab.el || !tab.el.clientWidth) return;
     try {
         tab.fitAddon.fit();
-        if (tab.stream && typeof tab.stream.setWindow === 'function') tab.stream.setWindow(tab.term.rows, tab.term.cols, 0, 0);
+        syncWindow(tab);
     } catch (e) {}
 }
 
@@ -453,6 +485,48 @@ function detectSessionOS(tab, conn) {
     } catch (e) { errors.record('detectSessionOS', e); }
 }
 
+// A hostile or broken server controls both how many questions it asks and how
+// long each one is; neither should be able to fill the screen.
+const MAX_PROMPTS = 8;
+const MAX_PROMPT_LEN = 200;
+
+// Keyboard-interactive is how 2FA and most PAM setups actually authenticate:
+// rather than taking a password up front, the server asks questions during the
+// handshake and waits for the answers. A single hidden question on a password
+// session is the ordinary "Password:" case, so the stored password answers it
+// once — asking the user to retype what the vault already holds would be
+// theatre. Anything else is a real question and goes to the user.
+function answerAuthPrompts(tab, cfg, prompts, finish) {
+    const list = (prompts || []).slice(0, MAX_PROMPTS);
+    if (!list.length) return finish([]);
+
+    const onlyPassword = list.length === 1 && list[0] && list[0].echo === false;
+    if (onlyPassword && cfg.authType === 'password' && cfg.password && !tab._askedStored) {
+        tab._askedStored = true;
+        return finish([cfg.password]);
+    }
+
+    const ask = require('./modal').askInput({
+        title: 'Authentication required',
+        message: cfg.label || cfg.host || '',
+        okLabel: 'Send',
+        fields: list.map((p, i) => ({
+            key: 'p' + i,
+            label: String((p && p.prompt) || 'Response').slice(0, MAX_PROMPT_LEN),
+            type: (p && p.echo) ? 'text' : 'password'
+        }))
+    });
+    ask.then(
+        r => {
+            // Cancelling answers nothing, which fails the handshake and lands on
+            // the usual retry prompt rather than hanging the connection open.
+            if (!r) return finish([]);
+            finish(list.map((p, i) => r['p' + i] || ''));
+        },
+        e => { errors.record('keyboard-interactive', e, tab.title); finish([]); }
+    );
+}
+
 function connectTerminalTab(tab) {
     if (tab.closed || tab._connecting) return;
     const cfg = S.getSession(tab.configId);
@@ -461,11 +535,15 @@ function connectTerminalTab(tab) {
     if (!cfg) { term.writeln('\r\n\x1b[31mThis session no longer exists.\x1b[0m'); return; }
     tab.error = null;
     tab._connecting = true;
+    // Each attempt gets one free go with the stored password.
+    tab._askedStored = false;
     term.writeln('\x1b[38;5;244mConnecting to ' + (cfg.host || '?') + '…\x1b[0m');
 
     let config;
     try {
-        config = terminal.buildConnectConfig(cfg);
+        // Only the session's own connection may put questions on screen; the
+        // second connection SFTP uses must authenticate silently.
+        config = terminal.buildConnectConfig(cfg, { interactive: true });
     } catch (e) {
         tab._connecting = false;
         tab.error = e.message;
@@ -482,13 +560,24 @@ function connectTerminalTab(tab) {
     // late events from a superseded client must not touch the live tab.
     const isCurrent = () => !tab.closed && tab.client === conn;
 
+    conn.on('keyboard-interactive', (name, instructions, lang, prompts, finish) => {
+        if (!isCurrent()) return finish([]);
+        answerAuthPrompts(tab, cfg, prompts, finish);
+    });
+
     conn.on('ready', () => {
         if (!isCurrent()) { try { conn.end(); } catch (e) {} return; }
+        try { conn.setNoDelay(true); } catch (e) {}
         tab._connecting = false;
         tab.connected = true; tab.error = null;
         clearErrorPrompt(tab);
         renderTabBar(); statusbar.updateStatusBar();
-        conn.shell({ term: 'xterm-256color' }, (err, stream) => {
+        // Opening at 80x24 and resizing a moment later makes anything already
+        // running on login (a tmux attach, a login banner) draw twice, the
+        // first time for a window that never existed.
+        const startRows = term.rows > 0 ? term.rows : 24;
+        const startCols = term.cols > 0 ? term.cols : 80;
+        conn.shell({ term: 'xterm-256color', rows: startRows, cols: startCols }, (err, stream) => {
             if (!isCurrent()) { killStream(stream); return; }
             if (err) {
                 tab.error = err.message;
@@ -497,6 +586,8 @@ function connectTerminalTab(tab) {
                 return;
             }
             tab.stream = stream;
+            // A fresh PTY knows only the size it was opened with.
+            tab._win = { rows: startRows, cols: startCols };
             fitTerminalTab(tab);
 
             stream.on('error', e => {
@@ -591,6 +682,6 @@ function init() {
 
 module.exports = {
     openTerminalTab, openGridTab, openToolTab, setActiveTab, closeTab, renderTabBar,
-    buildTerminalView, fitTerminalTab, connectTerminalTab, reconnectTab, resetTerminal, activeGrid, tabByOffset, tabByNumber, openTabs, init,
+    buildTerminalView, fitTerminalTab, syncWindow, pasteText, normalizePaste, connectTerminalTab, reconnectTab, resetTerminal, activeGrid, tabByOffset, tabByNumber, openTabs, init,
     termFontSize, setTermFontSize
 };

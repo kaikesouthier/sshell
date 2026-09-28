@@ -98,8 +98,11 @@ function tick(tab) {
 
     // A host that cannot answer (no /proc, exec disabled, channel limit reached)
     // would otherwise be re-probed every second for the life of the tab.
-    const fail = e => {
+    const fail = (e, stream) => {
         tab._monBusy = false;
+        // An abandoned channel holds a session slot on the server until the
+        // whole connection drops, and sshd only allows a handful at once.
+        if (stream) { try { stream.close(); } catch (err) {} }
         tab._monFails = (tab._monFails || 0) + 1;
         if (e) errors.record('monitor', e, tab.title);
         if (tab._monFails >= MAX_FAILS) { stop(tab); tab.monitorUnavailable = true; }
@@ -111,11 +114,12 @@ function tick(tab) {
             if (tab.closed) { tab._monBusy = false; try { stream.close(); } catch (e) {} return; }
             errors.guardStream(stream, 'monitor');
             // A channel can emit 'error' without ever emitting 'close'.
-            stream.on('error', e => fail(e));
+            stream.on('error', e => fail(e, stream));
             stream.on('data', d => { buf += d.toString(); });
             stream.stderr.on('data', () => {});
             stream.on('close', () => {
                 tab._monBusy = false;
+                if (buf.indexOf('K_END') === -1) return fail(null);
                 try { parseSample(tab, buf); tab._monFails = 0; }
                 catch (e) { errors.record('monitor.parse', e); }
                 if (RT.activeTabId === tab.id && !tab.closed) {

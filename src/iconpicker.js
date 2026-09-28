@@ -4,15 +4,19 @@ const icons = require('./icons');
 
 let resolver = null;
 let working = { icon: null, color: 'txt' };
+let query = '';
 
 function open(current) {
     if (resolver) { const prev = resolver; resolver = null; try { prev(null); } catch (e) {} }
     return new Promise(res => {
         resolver = res;
         working = { icon: (current && current.icon) || null, color: (current && current.color) || 'txt' };
+        query = '';
+        if ($('ipSearch')) $('ipSearch').value = '';
         renderColors();
         renderGrid();
         $('iconPicker').classList.remove('hidden');
+        setTimeout(() => { const s = $('ipSearch'); if (s) s.focus(); }, 30);
     });
 }
 function close(val) {
@@ -32,7 +36,12 @@ function renderColors() {
 }
 function renderGrid() {
     const grid = $('ipGrid');
-    grid.innerHTML = icons.ICON_KEYS.map(k => {
+    const keys = icons.searchIcons(query);
+    if (!keys.length) {
+        grid.innerHTML = '<div class="col-span-8 text-center text-xs text-faint py-8">No icon matches that.</div>';
+        return;
+    }
+    grid.innerHTML = keys.map(k => {
         const sel = working.icon === k ? 'bg-accent/20 ring-1 ring-accent' : 'hover:bg-panel3';
         return `<button data-icon="${k}" title="${k}" class="ip-icon aspect-square rounded-md flex items-center justify-center transition-colors ${sel}">${icons.iconSvg(k, working.color, 'w-5 h-5')}</button>`;
     }).join('');
@@ -46,6 +55,17 @@ function init() {
     $('ipClose').addEventListener('click', () => close(null));
     $('ipCancel').addEventListener('click', () => close(null));
     $('ipClear').addEventListener('click', () => close({ icon: null, color: working.color }));
+    const search = $('ipSearch');
+    if (search) {
+        search.addEventListener('input', () => { query = search.value; renderGrid(); });
+        // Enter takes the only match, so a search can be finished without reaching for the mouse.
+        search.addEventListener('keydown', e => {
+            if (e.key !== 'Enter') return;
+            const hits = icons.searchIcons(query);
+            if (hits.length === 1) working.icon = hits[0];
+            close({ icon: working.icon, color: working.color });
+        });
+    }
     $('ipOk').addEventListener('click', () => close({ icon: working.icon, color: working.color }));
     $('iconPicker').addEventListener('mousedown', e => { if (e.target === $('iconPicker')) close(null); });
 }

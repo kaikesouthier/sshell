@@ -25,7 +25,27 @@ function newTerminal(fontSize) {
     return term;
 }
 
-function buildConnectConfig(cfg) {
+// Where the SSH agent is listening. An explicit setting wins; otherwise take
+// the platform's usual home. On Windows that is the OpenSSH service's named
+// pipe when it exists, and Pageant (PuTTY, and what most Windows key tools
+// speak) otherwise — ssh2 talks to Pageant through its own helper, so there is
+// nothing for the user to configure in the common case.
+const OPENSSH_PIPE = '\\\\.\\pipe\\openssh-ssh-agent';
+function agentTarget(explicit) {
+    const set = (explicit || '').trim();
+    if (set) return set;
+    if (process.platform === 'win32') {
+        try { if (fs.existsSync(OPENSSH_PIPE)) return OPENSSH_PIPE; } catch (e) {}
+        return 'pageant';
+    }
+    return process.env.SSH_AUTH_SOCK || '';
+}
+
+// opts.interactive allows the server to ask the user questions during the
+// handshake (keyboard-interactive, which is how 2FA and most PAM setups work).
+// It is off by default because the second connection SFTP transfers use must
+// authenticate silently — prompting twice for one click would be baffling.
+function buildConnectConfig(cfg, opts) {
     if (!cfg.host) throw new Error('This session has no host set. Edit it and add one.');
     const hostkeys = require('./hostkeys');
     const port = cfg.port || 22;
@@ -39,7 +59,17 @@ function buildConnectConfig(cfg) {
         // Without this ssh2 accepts any key and then sends the password to it.
         hostVerifier: (keyBlob, verifyCb) => hostkeys.verify(cfg.host, port, keyBlob, verifyCb)
     };
-    if (cfg.authType === 'key' && cfg.keyPath) {
+    if (opts && opts.interactive) c.tryKeyboard = true;
+
+    if (cfg.authType === 'agent') {
+        const sock = agentTarget(cfg.agentPath);
+        if (!sock) {
+            throw new Error(process.platform === 'win32'
+                ? 'No SSH agent was found. Start the OpenSSH Authentication Agent service or run Pageant, then try again.'
+                : 'No SSH agent was found — SSH_AUTH_SOCK is not set. Start ssh-agent, or set the agent socket on this session.');
+        }
+        c.agent = sock;
+    } else if (cfg.authType === 'key' && cfg.keyPath) {
         try {
             c.privateKey = fs.readFileSync(cfg.keyPath);
         } catch (e) {
@@ -55,4 +85,4 @@ function buildConnectConfig(cfg) {
     return c;
 }
 
-module.exports = { newTerminal, buildConnectConfig, FitAddon };
+module.exports = { newTerminal, buildConnectConfig, agentTarget, FitAddon };

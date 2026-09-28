@@ -25,7 +25,7 @@ for (const f of analysers) {
     const r = run(f);
     const last = r.out.trim().split('\n').filter(Boolean).pop() || '(no output)';
     console.log('  ' + f.padEnd(13) + last);
-    if (/MISSING|FAIL/.test(r.out) && !/clock2/.test(r.out)) { failed++; broken.push(f); }
+    if (/MISSING|FAIL/.test(r.out)) { failed++; broken.push(f); }
 }
 
 console.log('\n--- suites ---');

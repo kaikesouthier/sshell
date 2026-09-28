@@ -13,6 +13,13 @@ const ICONS = {
 
 const queue = [];
 
+// A dialog that appears while the user is typing must not be dismissable by the
+// keystroke already on its way down. Dialogs also queue, so clearing a backlog
+// of notices with the Enter key used to walk straight through whatever arrived
+// next — including the host key prompt, whose OK button is "Trust the new key".
+const KEY_GUARD_MS = 400;
+let shownAt = 0;
+
 // Superseding a live dialog resolved the earlier one as "cancelled", so a background notify — a failed save, an SSH error, a caught exception —…
 function open(opts) {
     if (resolver) return new Promise(res => queue.push({ opts, res }));
@@ -29,7 +36,10 @@ function drain() {
     if (next) present(next.opts, next.res);
 }
 
+let dangerous = false;
+
 function show(opts) {
+    dangerous = !!opts.danger;
     const [color, pathD] = ICONS[opts.kind] || ICONS.info;
     $('msgIcon').innerHTML = `<svg class="w-6 h-6 text-${color}" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.7" d="${pathD}"></path></svg>`;
     $('msgTitle').textContent = opts.title || 'Notice';
@@ -42,7 +52,11 @@ function show(opts) {
         ? 'bg-bad hover:bg-bad/80 text-white'
         : 'bg-accent hover:bg-accent-hover text-white') + ' text-xs font-semibold px-4 py-2 rounded-md transition-colors';
     $('msgModal').classList.remove('hidden');
-    setTimeout(() => ok.focus(), 30);
+    shownAt = Date.now();
+    // Never put the keyboard on the destructive choice. For a danger dialog the
+    // safe button is the one that gets focus, so Space or Enter on the focused
+    // control refuses rather than accepts.
+    setTimeout(() => { (opts.danger && opts.cancel ? cancel : ok).focus(); }, 30);
 }
 
 function close(val) {
@@ -71,7 +85,17 @@ function init() {
     $('msgOk').addEventListener('click', () => close(true));
     $('msgCancel').addEventListener('click', () => close(false));
     m.addEventListener('mousedown', e => { if (e.target === m) close(false); });
-    m.addEventListener('keydown', e => { if (e.key === 'Enter') close(true); if (e.key === 'Escape') close(false); });
+    m.addEventListener('keydown', e => {
+        // Escape is always the safe direction, so it is never held back.
+        if (e.key === 'Escape') return close(false);
+        if (e.key !== 'Enter') return;
+        // Accepting a destructive dialog takes a deliberate click or a Tab to
+        // the button — "I was pressing Enter" must never trust a changed host
+        // key or open an executable a remote server named.
+        if (dangerous) return;
+        if (Date.now() - shownAt < KEY_GUARD_MS) return;
+        close(true);
+    });
 }
 
 module.exports = { notify, confirm, init };

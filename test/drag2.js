@@ -10,19 +10,31 @@ const grab = n => {
   }
 };
 const consts = /const MIN_W[\s\S]*?ZOOM_STEP = [\d.]+;\n/.exec(src)[0];
+// The real syncWindow from tabs.js: a pane resize must reach the remote PTY,
+// and the same size must not be sent twice.
+const tabsSrc = fs.readFileSync((__ROOT__ + '/src/tabs.js'), 'utf8');
+const grabFrom = (text, n) => {
+  const i = text.indexOf('function ' + n + '(');
+  let d = 0;
+  for (let k = text.indexOf('{', i); k < text.length; k++) {
+    if (text[k] === '{') d++;
+    else if (text[k] === '}') { d--; if (!d) return text.slice(i, k + 1); }
+  }
+};
+const syncWindow = new Function('errors', grabFrom(tabsSrc, 'syncWindow') + ';return syncWindow;')({ record() {} });
 const body = consts +
   'const snap=n=>Math.round(n/SNAP)*SNAP;const clampZoom=z=>Math.min(ZOOM_MAX,Math.max(ZOOM_MIN,z));\n' +
   'let activeDrag=null,zTop=10,suppressClickFor=null,activePan=null,fitQueued=null,zoomTimer=null;\n' +
   'let dragFrame=null,dragPointer=null;\n' +
-  ['bringToFront', 'beginDrag', 'onDragMove', 'applyDragFrame', 'growCanvasFast', 'onDragEnd',
+  ['tabsMod', 'bringToFront', 'beginDrag', 'onDragMove', 'applyDragFrame', 'growCanvasFast', 'onDragEnd',
    'getRect', 'setRect', 'applyRect', 'growCanvas', 'ensureExtent', 'fitTab', 'beginPan', 'onPanMove', 'endPan',
-   'applyZoom', 'zoomAt', 'setZoom', 'saveZoomSoon', 'updateZoomReadout'].map(grab).join('\n');
+   'applyZoom', 'scheduleZoomFit', 'zoomAt', 'setZoom', 'saveZoomSoon', 'updateZoomReadout'].map(grab).join('\n');
 
 let RT = { tabs: [] }, fits = [], remembered = [], cfg = { data: {} };
 const H = new Function('RT', 'require', 'rememberRect', 'requestAnimationFrame', '$',
   body + ';return {beginDrag,onDragMove,onDragEnd,getRect,zoomAt,setZoom,beginPan,onPanMove,endPan,' +
   'MIN_W,MIN_H,ZOOM_MIN,ZOOM_MAX,ZOOM_STEP,peek:()=>activeDrag,pan:()=>activePan,supp:()=>suppressClickFor};')(
-  RT, m => m === './config' ? cfg : { attempt: f => f(), record() {} },
+  RT, m => m === './config' ? cfg : m === './tabs' ? { syncWindow } : { attempt: f => f(), record() {} },
   (id, r) => remembered.push({ id, r }),
   // Default: run the callback synchronously and return a falsy id, so the
   // "frame already flushed" guard behaves as it does in a real browser.
@@ -46,9 +58,16 @@ function mkState(zoom) {
     cells: new Map([['t1', { cell }]]),
     rects: new Map([['t1', { x: 100, y: 100, w: 400, h: 300 }]])
   };
-  RT.tabs = [{ id: 't1', type: 'terminal', closed: false, configId: 'c1',
-    fitAddon: { fit() { fits.push('fit'); } }, term: { rows: 24, cols: 80 },
-    stream: { setWindow() { fits.push('setWindow'); } } }];
+  const tab = { id: 't1', type: 'terminal', closed: false, configId: 'c1',
+    term: { rows: 24, cols: 80, scrollToBottom() {} },
+    stream: { setWindow() { fits.push('setWindow'); } } };
+  tab.fitAddon = { fit() {
+    fits.push('fit');
+    const r = s.rects.get('t1');
+    tab.term.rows = Math.max(1, Math.floor(r.h / 20));
+    tab.term.cols = Math.max(1, Math.floor(r.w / 10));
+  } };
+  RT.tabs = [tab];
   return s;
 }
 const ev = (x, y, btn) => ({ clientX: x, clientY: y, button: btn === undefined ? 0 : btn,
@@ -121,11 +140,14 @@ t('mid-drag canvas scrolling is compensated', () => {
   // 100+50=150 -> 152, 100+24=124 -> 128 after snapping to the 8px grid.
   const r = H.getRect(s, 't1'); return (r.x === 152 && r.y === 128) || JSON.stringify(r);
 });
-t('the remote window is notified once, on release', () => {
+t('the remote window is told about every live resize, not just the release', () => {
+  // Resizing xterm without a SIGWINCH leaves tmux painting for the old size,
+  // so a fit always carries the new geometry; syncWindow drops the repeats.
   fits = []; const s = mkState(); H.beginDrag(s, 't1', 'br', ev(0, 0));
   H.onDragMove(ev(40, 40)); H.onDragMove(ev(80, 80));
   const during = fits.filter(f => f === 'setWindow').length; H.onDragEnd();
-  return during === 0 && fits.filter(f => f === 'setWindow').length === 1;
+  const after = fits.filter(f => f === 'setWindow').length;
+  return during >= 1 && after >= during;
 });
 t('geometry is persisted on release', () => {
   remembered = []; const s = mkState(); H.beginDrag(s, 't1', 'move', ev(0, 0)); H.onDragMove(ev(64, 64)); H.onDragEnd();

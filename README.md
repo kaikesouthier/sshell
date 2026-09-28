@@ -20,8 +20,9 @@ Tabbed terminals, a built-in SFTP client, a live server dashboard, a broadcast g
 
 ## Features
 
-- **Tabbed terminals** — full xterm.js terminals with reconnect, per-tab menus, and drag-to-reorder.
+- **Tabbed terminals** — full xterm.js terminals with reconnect, per-tab menus, drag-to-reorder, and Ctrl+wheel to zoom the text of any terminal or grid pane.
 - **Encrypted vault** — every session (passwords and key passphrases included) is stored with **AES‑256‑GCM**, keyed by **scrypt** from a master passphrase you set on first run. Nothing is written in the clear.
+- **SSH agent and 2FA** — authenticate through Pageant, the Windows OpenSSH agent, 1Password, KeeAgent or a hardware key, with no secret stored in the vault at all. Servers that ask questions during login (keyboard-interactive, so TOTP and most PAM setups) are answered as they ask.
 - **Trust-on-first-use host keys** — SSH host keys are verified and pinned like OpenSSH; you're warned loudly if a key ever changes.
 - **SFTP file browser** — browse, upload, download, rename, delete, and "open with" your local editor (edits sync back). Transfers run on their **own SSH connection** so a big upload never freezes your shell.
 - **Live server dashboard** — CPU, memory, network, uptime, logged-in users, and disk shown live in the status bar for the active session.
@@ -89,7 +90,7 @@ You can relocate the data folder from **File ▸ Configuration**. If you forget 
 npm test    # runs the full suite (no app window needed)
 ```
 
-The renderer is plain CommonJS modules under `src/`, with HTML partials in `views/` and styles in `assets/`. There is no bundler — modules load via `require()`. The test suite runs the real modules against stubs, so it's fast and needs no display.
+The renderer is plain CommonJS modules under `src/`, with HTML partials in `views/` and styles in `assets/`. There is no bundler — modules load via `require()`. Most suites load the real modules against stubbed DOM and Electron globals; some extract a single function from its source and exercise it in isolation. Either way it is fast and needs no display.
 
 | Path | What's there |
 |------|--------------|

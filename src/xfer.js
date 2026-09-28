@@ -86,6 +86,7 @@ function connect(tab, cb) {
             return fallbackTo(tab, waiters, err, cfg.host);
         }
         st.ready = true;
+        try { client.setNoDelay(true); } catch (e) {}
         touch(tab);
         waiters.forEach(w => { try { w(null, client, true); } catch (e) { errors.record('xfer.waiter', e); } });
     };

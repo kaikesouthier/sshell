@@ -15,28 +15,35 @@ const grab = n => {
 };
 
 const body =
-  'let transfers=[],xferSeq=1;const SFTP_OPEN_TIMEOUT=20000;\n' +
+  'let transfers=[],xferSeq=1;const SFTP_OPEN_TIMEOUT=20000;const CANCEL_GRACE_MS=3000;\n' +
   ['addTransfer', 'transferById', 'openTransferChannel', 'closeChannel', 'discardPartial',
    'cancelTransfer', 'cancelAllTransfers', 'stepTransfer', 'finishTransfer', 'wasCancelled',
-   'errCode'].map(grab).join('\n');
+   'errCode', 'guardedAttempt'].map(grab).join('\n');
 
-let unlinkedRemote = [], unlinkedLocal = [], rendered = 0, xferChannels = 0;
-const H = new Function('fs', 'errors', 'ensureSftp', 'renderTransfers', 'sftpState', 'sftpRefresh', 'setTimeout', 'xfer', 'discardChannel',
+let unlinkedRemote = [], unlinkedLocal = [], rendered = 0, xferChannels = 0, pendingTimers = [];
+const H = new Function('fs', 'errors', 'ensureSftp', 'renderTransfers', 'sftpState', 'sftpRefresh', 'setTimeout', 'clearTimeout', 'xfer', 'discardChannel',
   body + ';return {addTransfer,cancelTransfer,cancelAllTransfers,finishTransfer,stepTransfer,' +
-  'wasCancelled,openTransferChannel,closeChannel,list:()=>transfers};')(
+  'wasCancelled,openTransferChannel,closeChannel,guardedAttempt,list:()=>transfers};')(
   { unlinkSync: p => unlinkedLocal.push(p) },
   { record() {} },
   (tab, cb) => cb(null, { unlink: (p, cb2) => { unlinkedRemote.push(p); cb2(null); } }),
   () => { rendered++; },
   { tabId: null },
   () => {},
-  // Run the short deferred cleanup immediately, but leave long timers
-  // (the 20s channel-open timeout) unfired.
-  (fn, ms) => { if (!ms || ms < 1000) fn(); return 0; },
+  // Run the short deferred cleanup immediately; long timers (the 20s
+  // channel-open timeout, the cancel watchdog) are held for firePending().
+  (fn, ms) => { if (!ms || ms < 1000) { fn(); return 0; } pendingTimers.push({ fn, ms }); return pendingTimers.length; },
+  id => { if (id > 0 && pendingTimers[id - 1]) pendingTimers[id - 1].fn = null; },
   // Transfers now open their channel on the dedicated connection.
   { clientFor: (tab, cb) => cb(null, { sftp: scb => { xferChannels++; scb(null, mkChannel()); } }, true) },
   () => {}
 );
+// Fire every held timer of the given length (the cancel watchdog is 3000ms).
+const firePending = ms => {
+  const due = pendingTimers.filter(p => p.fn && p.ms === ms);
+  due.forEach(p => { const fn = p.fn; p.fn = null; fn(); });
+  return due.length;
+};
 
 let pass = 0, fail = 0;
 const t = (n, c) => {
@@ -49,7 +56,16 @@ const t = (n, c) => {
 
 const mkChannel = () => { const c = { ended: false, destroyed: false }; c.end = () => { c.ended = true; }; c.destroy = () => { c.destroyed = true; }; return c; };
 const mkTab = () => ({ id: 'tab1', closed: false, connected: true, client: {}, title: 'srv' });
-const reset = () => { unlinkedRemote = []; unlinkedLocal = []; H.list().length = 0; };
+const reset = () => { unlinkedRemote = []; unlinkedLocal = []; H.list().length = 0; pendingTimers = []; };
+// A channel that is also an EventEmitter, as ssh2's SFTP channel is.
+const mkEmitChannel = () => {
+  const c = mkChannel(), ls = {};
+  c.once = (ev, fn) => { (ls[ev] = ls[ev] || []).push(fn); };
+  c.removeListener = (ev, fn) => { ls[ev] = (ls[ev] || []).filter(f => f !== fn); };
+  c.emit = ev => { const l = ls[ev] || []; ls[ev] = []; l.forEach(f => f()); };
+  c.listeners = ev => (ls[ev] || []).length;
+  return c;
+};
 
 reset();
 t('a new transfer starts active and not cancelled', () => {
@@ -193,6 +209,103 @@ t('progress updates the transfer without ending it', () => {
   x._lastTime = Date.now() - 1000;
   H.stepTransfer(x, 500, 1000);
   return x.done === 500 && x.status === 'active';
+});
+
+// --- transfers that ssh2 never calls back ---
+// fastGet/fastPut only call back once the server answers. A dropped
+// connection never answers, so the transfer froze and Cancel then sat on
+// "cancelling…" for good.
+
+reset();
+t('a channel that closes without calling back fails the transfer', () => {
+  const x = H.addTransfer('a.bin', 'down', 100);
+  const ch = mkEmitChannel(); x.channel = ch; x.tab = mkTab();
+  let got;
+  H.guardedAttempt(x, ch, () => { /* ssh2 never calls back */ })(e => { got = e; });
+  ch.emit('close');                        // the socket died
+  return got instanceof Error && /closed before the transfer finished/.test(got.message);
+});
+
+reset();
+t('a channel that closes after a cancel settles the attempt as cancelled, not failed', () => {
+  const x = H.addTransfer('a.bin', 'down', 100);
+  const ch = mkEmitChannel(); x.channel = ch; x.tab = mkTab();
+  let got = 'unset';
+  H.guardedAttempt(x, ch, () => {})(e => { got = e; });
+  H.cancelTransfer(x.id);
+  ch.emit('close');                        // the server acknowledged the close
+  return got === null && x.status === 'cancelling';
+});
+
+reset();
+t('a normal completion stops listening for the close', () => {
+  const x = H.addTransfer('a.bin', 'down', 100);
+  const ch = mkEmitChannel(); x.channel = ch; x.tab = mkTab();
+  let calls = 0;
+  H.guardedAttempt(x, ch, done => done(null))(() => { calls++; });
+  ch.emit('close');                        // finishTransfer closes the channel afterwards
+  return calls === 1 && ch.listeners('close') === 0 && x.settle === null;
+});
+
+reset();
+t('an attempt on an already-cancelled transfer never touches the channel', () => {
+  const x = H.addTransfer('a.bin', 'up', 100);
+  const ch = mkEmitChannel(); x.tab = mkTab();
+  x.cancelled = true;
+  let ran = false, got = 'unset';
+  H.guardedAttempt(x, ch, () => { ran = true; })(e => { got = e; });
+  return !ran && got === null;
+});
+
+reset();
+t('a cancel that the server never acknowledges is settled by the watchdog', () => {
+  const x = H.addTransfer('a.bin', 'down', 100);
+  const ch = mkEmitChannel(); x.channel = ch; x.tab = mkTab(); x.local = 'C:/tmp/a.bin';
+  let got = 'unset';
+  H.guardedAttempt(x, ch, () => {})(e => { got = e; H.finishTransfer(x, e); });
+  H.cancelTransfer(x.id);
+  if (x.status !== 'cancelling') return 'expected cancelling, got ' + x.status;
+  const fired = firePending(3000);         // the connection is dead: no close ever comes
+  return fired === 1 && got === null && x.status === 'cancelled' && unlinkedLocal.join() === 'C:/tmp/a.bin';
+});
+
+reset();
+t('cancelling while the channel is still being opened does not wait on it', () => {
+  const x = H.addTransfer('a.bin', 'up', 100);
+  x.tab = mkTab(); x.remote = '/srv/a.bin';        // no channel yet
+  H.cancelTransfer(x.id);
+  firePending(3000);
+  return x.status === 'cancelled' && unlinkedRemote.length === 0;
+});
+
+reset();
+t('a transfer settled before the watchdog fires is not settled twice', () => {
+  const x = H.addTransfer('a.bin', 'down', 100);
+  const ch = mkEmitChannel(); x.channel = ch; x.tab = mkTab(); x.local = 'C:/tmp/a.bin';
+  H.guardedAttempt(x, ch, () => {})(e => H.finishTransfer(x, e));
+  H.cancelTransfer(x.id);
+  ch.emit('close');
+  const fired = firePending(3000);
+  return fired === 0 && x.status === 'cancelled' && unlinkedLocal.length === 1;
+});
+
+reset();
+t('finishing a transfer twice deletes the partial only once', () => {
+  const x = H.addTransfer('a.bin', 'up', 100);
+  x.channel = mkChannel(); x.tab = mkTab(); x.remote = '/srv/a.bin'; x.wrote = true;
+  H.cancelTransfer(x.id);
+  H.finishTransfer(x, new Error('aborted'));
+  H.finishTransfer(x, new Error('aborted again'));
+  return x.status === 'cancelled' && unlinkedRemote.length === 1;
+});
+
+reset();
+t('a late error cannot overwrite a finished transfer', () => {
+  const x = H.addTransfer('a.bin', 'up', 100);
+  x.channel = mkChannel(); x.tab = mkTab();
+  H.finishTransfer(x, null);
+  H.finishTransfer(x, new Error('No response from server'));
+  return x.status === 'done';
 });
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed');

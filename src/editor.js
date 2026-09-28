@@ -74,6 +74,13 @@ function setModalAuth(type) {
     });
     $('authPassword').classList.toggle('hidden', type !== 'password');
     $('authKey').classList.toggle('hidden', type !== 'key');
+    $('authAgent').classList.toggle('hidden', type !== 'agent');
+    if (type === 'agent') {
+        const found = require('./terminal').agentTarget($('fAgentPath').value);
+        $('fAgentHint').textContent = found
+            ? 'Using ' + found
+            : 'No agent found. Start one, or enter its socket above.';
+    }
 }
 
 function openEditor(id, presetFolderId, savedCb) {
@@ -92,6 +99,7 @@ function openEditor(id, presetFolderId, savedCb) {
     $('fUser').value = s ? s.username : '';
     $('fPassword').value = s ? s.password : '';
     $('fKeyPath').value = s ? s.keyPath : '';
+    $('fAgentPath').value = s ? (s.agentPath || '') : '';
     $('fPassphrase').value = s ? s.passphrase : '';
     sidebar.populateFolderSelect($('fFolder'), s ? s.folderId : (presetFolderId || ''));
     setModalAuth(s ? s.authType : 'password');
@@ -117,6 +125,9 @@ function saveEditor() {
     if (!host) return showModalError('Host is required.');
     if (!username) return showModalError('Username is required.');
     if (modalAuth === 'key' && !$('fKeyPath').value.trim()) return showModalError('A private key file is required for key auth.');
+    if (modalAuth === 'agent' && !require('./terminal').agentTarget($('fAgentPath').value)) {
+        return showModalError('No SSH agent was found. Start one, or enter its socket or pipe above.');
+    }
 
     // An out-of-range port used to be saved and only fail later as an opaque
     // connection error.
@@ -132,6 +143,7 @@ function saveEditor() {
         authType: modalAuth,
         password: $('fPassword').value,
         keyPath: $('fKeyPath').value.trim(),
+        agentPath: $('fAgentPath').value.trim(),
         passphrase: $('fPassphrase').value,
         icon: editIcon,
         iconColor: editIconColor,

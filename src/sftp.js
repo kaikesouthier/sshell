@@ -11,7 +11,7 @@ const dialog = require('./dialog');
 const errors = require('./errors');
 const xfer = require('./xfer');
 
-const sftpState = { tabId: null, cwd: null, entries: [], loading: false, error: null, sortKey: 'name', sortDir: 1, reqSeq: 0, selected: new Set(), anchor: null, cache: new Map() };
+const sftpState = { tabId: null, cwd: null, entries: [], loading: false, error: null, sortKey: 'name', sortDir: 1, reqSeq: 0, selected: new Set(), anchor: null, cache: new Map(), byName: new Map() };
 
 // A small per-(server, directory) listing cache so switching servers or folders
 // repaints instantly instead of blanking to a spinner for a round trip. Every
@@ -54,7 +54,11 @@ function invalidateCache(tabId, dir) {
 
 function targetsTab(id) { return sftpState.tabId === id; }
 function onTabClosed(tab) {
-    stopWatchers(tab);
+    const stopped = stopWatchers(tab);
+    // Only remove the directory when nothing was left behind: stopWatchers
+    // deliberately keeps the local copy of an edit that never reached the
+    // server, and the dialog it shows points the user at that exact path.
+    if (!stopped.length) removeTempDir(tab);
     xfer.closeFor(tab);
     invalidateCache(tab.id);
     if (sftpState.tabId === tab.id) {
@@ -274,9 +278,23 @@ function sftpRefresh() {
     sftpList(sftpState.cwd);
 }
 
+// Shown next to the path so a slow listing is attributable at a glance rather
+// than by guesswork: wait is time on the wire (opening the channel and reading
+// the directory), draw is time spent building the table.
+function showListStat(count, wait, draw) {
+    const el = $('sftpStat');
+    if (!el) return;
+    const total = wait + draw;
+    el.textContent = count + ' item' + (count === 1 ? '' : 's') + ' · ' + (total >= 1000 ? (total / 1000).toFixed(1) + 's' : total + 'ms');
+    el.title = 'server ' + wait + 'ms · drawing ' + draw + 'ms';
+    if (total > SLOW_LIST_MS) errors.record('sftp.slow', new Error('listing took ' + total + 'ms'), 'server ' + wait + 'ms, drawing ' + draw + 'ms, ' + count + ' entries');
+}
+const SLOW_LIST_MS = 1500;
+
 function sftpList(dir) {
     const tab = getSftpTab(); if (!tab) return;
     const previousDir = sftpState.cwd;
+    const startedAt = Date.now();
     // Responses can land out of order (a slow parent listing arriving after a
     // fast child). Only the newest request may write to the shared state.
     const req = ++sftpState.reqSeq;
@@ -320,9 +338,15 @@ function sftpList(dir) {
                 putCache(tab.id, dir, entries);
                 sftpState.entries = entries;
                 setBusy(false);
+                const wait = Date.now() - startedAt;
                 // Skip a redundant repaint when the cached view already matches,
                 // so a background refresh never resets scroll or a live selection.
+                const drawFrom = Date.now();
                 if (changed) renderSftpTable();
+                // The browser lays the table out after this returns, so measure
+                // on the next frame or the drawing figure reads as ~0ms.
+                const paint = () => showListStat(entries.length, wait, Date.now() - drawFrom);
+                if (typeof requestAnimationFrame === 'function') requestAnimationFrame(paint); else paint();
             });
         } catch (e) {
             if (settled || stale()) return;
@@ -431,6 +455,12 @@ function selectRangeOfFiles(name) {
     for (let i = a; i <= b; i++) sftpState.selected.add(order[i]);
 }
 
+const ICO = 'w-3.5 h-3.5 inline-block mr-1 -mt-0.5';
+const SFTP_DEFS = `<svg width="0" height="0" class="absolute" aria-hidden="true"><defs>
+    <g id="sftpIcoDir" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V7z"></path></g>
+    <g id="sftpIcoFile" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4a1 1 0 011-1h9l6 6v11a1 1 0 01-1 1H5a1 1 0 01-1-1V4z"></path></g>
+</defs></svg>`;
+
 function renderSftpTable() {
     const dir = sftpState.cwd;
     const entries = sftpState.entries.slice().sort(compareEntries);
@@ -438,7 +468,11 @@ function renderSftpTable() {
     if (dir && dir !== '/') rows.push(rowHtml({ name: '..', isDir: true, size: 0, mtime: 0, access: 'd---------', owner: '', group: '' }, true));
     entries.forEach(en => rows.push(rowHtml(en, false)));
 
-    $('sftpBody').innerHTML = `
+    // Rows are looked up by name on every click, and the old code scanned the
+    // whole listing each time — which is quadratic over a large directory.
+    sftpState.byName = new Map(entries.map(e => [e.name, e]));
+
+    $('sftpBody').innerHTML = SFTP_DEFS + `
         <table class="w-full text-[11px] border-collapse" style="min-width:520px">
             <thead class="sticky top-0 bg-panel text-faint z-[1]">
                 <tr class="text-left">
@@ -453,57 +487,75 @@ function renderSftpTable() {
             <tbody>${rows.join('')}</tbody>
         </table>`;
 
-    $('sftpBody').querySelectorAll('.sort-th').forEach(th => th.addEventListener('click', () => {
-        const key = th.dataset.sort;
-        if (sftpState.sortKey === key) sftpState.sortDir *= -1;
-        else { sftpState.sortKey = key; sftpState.sortDir = 1; }
-        saveSortPref();
-        renderSftpTable();
-    }));
     // Drop selections for names that are no longer listed.
-    const present = new Set(entries.map(e => e.name));
-    sftpState.selected.forEach(n => { if (!present.has(n)) sftpState.selected.delete(n); });
-
-    $('sftpBody').querySelectorAll('tr[data-name]').forEach(tr => {
-        const name = tr.dataset.name;
-        const isDir = tr.dataset.dir === '1';
-        const entry = name === '..' ? null : entries.find(e => e.name === name);
-
-        tr.addEventListener('click', e => {
-            if (sftpState.loading || !entry) return;
-            if (e.ctrlKey || e.metaKey) {
-                if (sftpState.selected.has(name)) sftpState.selected.delete(name);
-                else { sftpState.selected.add(name); sftpState.anchor = name; }
-            } else if (e.shiftKey) {
-                selectRangeOfFiles(name);
-            } else {
-                sftpState.selected.clear();
-                sftpState.selected.add(name);
-                sftpState.anchor = name;
-            }
-            paintFileSelection();
-        });
-        tr.addEventListener('dblclick', () => {
-            if (sftpState.loading) return;
-            if (isDir) return sftpList(pjoin(dir, name));
-            if (entry) openWithEditor(entry, dir);
-        });
-        if (entry) tr.addEventListener('contextmenu', e => {
-            e.preventDefault();
-            if (sftpState.loading) return;
-            // Right-clicking outside the selection re-targets it to that row.
-            if (!sftpState.selected.has(name)) { sftpState.selected.clear(); sftpState.selected.add(name); sftpState.anchor = name; paintFileSelection(); }
-            showFileMenu(e.clientX, e.clientY, entry, dir);
-        });
-    });
+    sftpState.selected.forEach(n => { if (!sftpState.byName.has(n)) sftpState.selected.delete(n); });
     paintFileSelection();
 }
+
+// One set of listeners on the container, rather than three on every row: a
+// directory of a few thousand files was installing thousands of handlers on
+// each listing, and tearing them all down again on the next one.
+function installTableHandlers() {
+    const body = $('sftpBody');
+    const rowOf = e => e.target.closest && e.target.closest('tr[data-name]');
+    const entryOf = tr => (tr.dataset.name === '..' ? null : sftpState.byName.get(tr.dataset.name) || null);
+
+    body.addEventListener('click', e => {
+        const th = e.target.closest && e.target.closest('.sort-th');
+        if (th) {
+            const key = th.dataset.sort;
+            if (sftpState.sortKey === key) sftpState.sortDir *= -1;
+            else { sftpState.sortKey = key; sftpState.sortDir = 1; }
+            saveSortPref();
+            renderSftpTable();
+            return;
+        }
+        const tr = rowOf(e);
+        if (!tr || sftpState.loading) return;
+        const name = tr.dataset.name;
+        if (!entryOf(tr)) return;
+        if (e.ctrlKey || e.metaKey) {
+            if (sftpState.selected.has(name)) sftpState.selected.delete(name);
+            else { sftpState.selected.add(name); sftpState.anchor = name; }
+        } else if (e.shiftKey) {
+            selectRangeOfFiles(name);
+        } else {
+            sftpState.selected.clear();
+            sftpState.selected.add(name);
+            sftpState.anchor = name;
+        }
+        paintFileSelection();
+    });
+
+    body.addEventListener('dblclick', e => {
+        const tr = rowOf(e);
+        if (!tr || sftpState.loading) return;
+        const name = tr.dataset.name;
+        if (tr.dataset.dir === '1') return sftpList(pjoin(sftpState.cwd, name));
+        const entry = entryOf(tr);
+        if (entry) openWithEditor(entry, sftpState.cwd);
+    });
+
+    body.addEventListener('contextmenu', e => {
+        const tr = rowOf(e);
+        if (!tr) return;
+        const entry = entryOf(tr);
+        if (!entry) return;
+        e.preventDefault();
+        if (sftpState.loading) return;
+        // Right-clicking outside the selection re-targets it to that row.
+        const name = tr.dataset.name;
+        if (!sftpState.selected.has(name)) { sftpState.selected.clear(); sftpState.selected.add(name); sftpState.anchor = name; paintFileSelection(); }
+        showFileMenu(e.clientX, e.clientY, entry, sftpState.cwd);
+    });
+}
+
 function rowHtml(en, isUp) {
     const k = en.size / 1024;
     const kb = en.isDir ? '—' : (k >= 100 ? Math.round(k).toString() : k >= 1 ? k.toFixed(1) : k.toFixed(2));
     const icon = en.isDir
-        ? `<svg class="w-3.5 h-3.5 inline-block mr-1 -mt-0.5 ${isUp ? 'text-faint' : 'text-accent/80'}" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V7z"></path></svg>`
-        : `<svg class="w-3.5 h-3.5 inline-block mr-1 -mt-0.5 text-faint" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4a1 1 0 011-1h9l6 6v11a1 1 0 01-1 1H5a1 1 0 01-1-1V4z"></path></svg>`;
+        ? `<svg class="${ICO} ${isUp ? 'text-faint' : 'text-accent/80'}" viewBox="0 0 24 24"><use href="#sftpIcoDir"></use></svg>`
+        : `<svg class="${ICO} text-faint" viewBox="0 0 24 24"><use href="#sftpIcoFile"></use></svg>`;
     return `<tr data-name="${escapeHtml(en.name)}" data-dir="${en.isDir ? 1 : 0}" class="sftp-row border-b border-edge/40 ${en.isDir ? 'dir' : ''}">
         <td class="px-2 py-1.5 max-w-[180px]"><span class="sftp-name truncate inline-block align-middle max-w-[150px] font-medium text-txt/90">${icon}${escapeHtml(en.name)}</span></td>
         <td class="px-2 py-1.5 text-right font-mono text-muted whitespace-nowrap">${kb}</td>
@@ -805,17 +857,38 @@ async function downloadEntry(entry, dir) {
             4, alive(tab));
     });
 }
+// Files fetched for editing are copies of remote configs and keys, so where
+// they land matters. The old path was os.tmpdir()/sshell/<tab id>, which is
+// predictable — tab ids come from the clock — and mkdir does not repair a
+// directory somebody else created first. On a shared machine another local
+// account could pre-create or symlink it and read everything opened through
+// here. mkdtemp picks an unguessable name and fails outright if it cannot
+// create it, so the directory is always ours.
+function tempDirFor(tab) {
+    if (tab._tmpDir && fs.existsSync(tab._tmpDir)) return tab._tmpDir;
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sshell-'));
+    // mkdtemp is already 0700 on POSIX; this is belt and braces for umask
+    // oddities and is a no-op on Windows, where ACLs govern instead.
+    try { fs.chmodSync(root, 0o700); } catch (e) {}
+    tab._tmpDir = root;
+    return root;
+}
+
+// The whole directory goes when the tab does, not just the files still watched.
+function removeTempDir(tab) {
+    if (!tab || !tab._tmpDir) return;
+    const dir = tab._tmpDir;
+    tab._tmpDir = null;
+    try { fs.rmSync(dir, { recursive: true, force: true }); } catch (e) { errors.record('sftp.tmp', e, dir); }
+}
+
 function openWithEditor(entry, dir) {
     if (busy()) return;
     const tab = getSftpTab(); if (!tab) return;
 
-    const tmpDir = path.join(os.tmpdir(), 'sshell', String(tab.id));
-    try {
-        // 0700: these are copies of remote files (configs, keys) and the default
-        // mode leaves them readable by every local account.
-        fs.mkdirSync(tmpDir, { recursive: true, mode: 0o700 });
-        try { fs.chmodSync(tmpDir, 0o700); } catch (e) {}
-    } catch (e) {
+    let tmpDir;
+    try { tmpDir = tempDirFor(tab); }
+    catch (e) {
         return dialog.notify('Could not create a temporary folder:\n\n' + errors.describe(e), { kind: 'error' });
     }
 
@@ -927,6 +1000,8 @@ function stopWatchers(tab, silent) {
     list.filter(w => stranded.indexOf(w) < 0).forEach(w => {
         try { fs.unlinkSync(w.local); } catch (e) {}
     });
+    // Callers use this to decide whether the temp directory can go.
+    return stranded;
 }
 
 // Editors on Windows (and vim/emacs everywhere) save atomically: write a temp file, then rename it over the target.
@@ -1384,6 +1459,7 @@ function renderTransfers() {
 
 function init() {
     loadSortPref();
+    installTableHandlers();
     $('sftpUpload').addEventListener('click', () => { if (busy() || !getSftpTab()) return; $('sftpUploadPicker').click(); });
     $('sftpUploadPicker').addEventListener('change', () => {
         const files = Array.from($('sftpUploadPicker').files || []);

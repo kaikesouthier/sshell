@@ -33,6 +33,7 @@
                 <div class="flex bg-panel border border-edge rounded-md p-0.5 text-xs font-medium">
                     <button data-auth="password" class="auth-tab flex-1 py-1.5 rounded transition-colors">Password</button>
                     <button data-auth="key" class="auth-tab flex-1 py-1.5 rounded transition-colors">Private Key</button>
+                    <button data-auth="agent" class="auth-tab flex-1 py-1.5 rounded transition-colors">Agent</button>
                 </div>
             </div>
             <div id="authPassword"><label class="block text-[11px] font-semibold text-muted mb-1">Password</label>
@@ -43,6 +44,12 @@
                         <svg data-eye="hide" class="w-4 h-4 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M3 3l18 18"></path></svg>
                     </button>
                 </div></div>
+            <div id="authAgent" class="hidden space-y-3">
+                <p class="text-[11px] text-muted leading-relaxed">Keys are held by your SSH agent, so nothing secret is stored here. Works with Pageant, the Windows OpenSSH agent, 1Password, KeeAgent and hardware keys.</p>
+                <div><label class="block text-[11px] font-semibold text-muted mb-1">Agent socket or pipe <span class="text-faint font-normal">(optional)</span></label>
+                    <input id="fAgentPath" type="text" placeholder="Detected automatically" class="w-full bg-panel border border-edge rounded-md px-3 py-2 text-sm text-txt placeholder-faint focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/50">
+                    <p id="fAgentHint" class="text-[10px] text-faint mt-1"></p></div>
+            </div>
             <div id="authKey" class="hidden space-y-3">
                 <div><label class="block text-[11px] font-semibold text-muted mb-1">Private key file</label>
                     <div class="flex gap-2">
@@ -215,6 +222,9 @@
         <div class="px-5 py-3 border-b border-edge shrink-0">
             <div class="text-[11px] font-semibold tracking-widest text-faint uppercase mb-2">Color</div>
             <div id="ipColors" class="flex flex-wrap gap-2"></div>
+        </div>
+        <div class="px-5 py-3 border-b border-edge shrink-0">
+            <input id="ipSearch" type="text" placeholder="Search icons — try docker, ubuntu, backup…" class="w-full bg-panel border border-edge rounded-md px-2.5 py-1.5 text-xs text-txt placeholder-faint focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/50" />
         </div>
         <div id="ipGrid" class="p-3 grid grid-cols-8 gap-1.5 flex-1 min-h-0 overflow-y-auto content-start"></div>
         <div class="px-5 py-4 border-t border-edge flex items-center justify-between gap-2 shrink-0">

@@ -322,18 +322,19 @@ t('the overlay is opaque so it hides the toolbar under it', () => {
     const m = /<div id="sftpSelBar" class="([^"]*)"/.exec(html);
     return !!m && /bg-panel2/.test(m[1]) && /z-10/.test(m[1]);
 });
+// Rows share one delegated handler now, so the assertions follow it there.
 t('double-clicking a file opens it with the OS', () => {
-    const i = sftpSrc.indexOf("tr.addEventListener('dblclick'");
-    const fn = sftpSrc.slice(i, i + 320);
-    return /isDir\) return sftpList/.test(fn) && /openWithEditor\(entry, dir\)/.test(fn);
+    const i = sftpSrc.indexOf("body.addEventListener('dblclick'");
+    const fn = sftpSrc.slice(i, i + 380);
+    return /openWithEditor\(entry, sftpState\.cwd\)/.test(fn);
 });
 t('double-clicking a folder still navigates into it', () => {
-    const i = sftpSrc.indexOf("tr.addEventListener('dblclick'");
-    return /if \(isDir\) return sftpList\(pjoin\(dir, name\)\)/.test(sftpSrc.slice(i, i + 320));
+    const i = sftpSrc.indexOf("body.addEventListener('dblclick'");
+    return /dataset\.dir === '1'\) return sftpList\(pjoin\(sftpState\.cwd, name\)\)/.test(sftpSrc.slice(i, i + 380));
 });
 t('double-click still respects a loading listing', () => {
-    const i = sftpSrc.indexOf("tr.addEventListener('dblclick'");
-    return /if \(sftpState\.loading\) return/.test(sftpSrc.slice(i, i + 320));
+    const i = sftpSrc.indexOf("body.addEventListener('dblclick'");
+    return /if \(!tr \|\| sftpState\.loading\) return/.test(sftpSrc.slice(i, i + 380));
 });
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed');

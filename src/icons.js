@@ -124,10 +124,97 @@ const ICONS = {
     scan: ['M4 7V5a1 1 0 011-1h2M17 4h2a1 1 0 011 1v2M20 17v2a1 1 0 01-1 1h-2M7 20H5a1 1 0 01-1-1v-2', 'M4 12h16'],
     navigation: ['M12 3l7 16-7-4-7 4 7-16z'],
     route: ['M6 19a2 2 0 100-4 2 2 0 000 4zM18 9a2 2 0 100-4 2 2 0 000 4z', 'M6 15V9a4 4 0 014-4h4M18 9v6a4 4 0 01-4 4h-4'],
-    'folder-plus': ['M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V7z', 'M12 11v4M10 13h4']
+    'folder-plus': ['M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V7z', 'M12 11v4M10 13h4'],
+
+    // Infrastructure a server manager actually points at. Added after 1.0, so
+    // never rely on these existing when reading a vault — iconSvg falls back.
+    docker: ['M4 12h14a4 4 0 01-4 5H8a4 4 0 01-4-4v-1z', 'M6 11V9h2v2M9 11V9h2v2M12 11V9h2v2M9 8V6h2v2', 'M18 11a3 3 0 012-1'],
+    container: ['M4 8l8-4 8 4v8l-8 4-8-4V8z', 'M8 10v6M12 8v8M16 10v6'],
+    kubernetes: ['M12 3l8 4v8l-8 4-8-4V7l8-4z', 'M12 9a3 3 0 100 6 3 3 0 000-6z', 'M12 3v6M12 15v6M20 7l-5.5 3.5M4 7l5.5 3.5M20 15l-5.5-3.5M4 15l5.5-3.5'],
+    proxmox: ['M12 3l8 4.6v8.8L12 21l-8-4.6V7.6L12 3z', 'M9 9l6 6M15 9l-6 6'],
+    ubuntu: ['M12 3a9 9 0 100 18 9 9 0 000-18z', 'M7 12a1.6 1.6 0 100-3.2A1.6 1.6 0 007 12z', 'M15.5 7.4a1.6 1.6 0 100-3.2 1.6 1.6 0 000 3.2z', 'M15.5 19.8a1.6 1.6 0 100-3.2 1.6 1.6 0 000 3.2z', 'M12 8.5a3.5 3.5 0 000 7'],
+    debian: ['M12 3a9 9 0 100 18 9 9 0 000-18z', 'M15.5 8a5 5 0 10-1.2 7.6'],
+    'raspberry-pi': ['M12 8a4 4 0 100 8 4 4 0 000-8z', 'M9 6.5C9 5 10 4 12 4s3 1 3 2.5', 'M6 9H4M6 12H4M6 15H4M20 9h-2M20 12h-2M20 15h-2', 'M9 18v2M15 18v2'],
+    nas: ['M5 4h14a1 1 0 011 1v14a1 1 0 01-1 1H5a1 1 0 01-1-1V5a1 1 0 011-1z', 'M8 7v10M12 7v10M16 7v10'],
+    vm: ['M3 6h18a1 1 0 011 1v8a1 1 0 01-1 1H3a1 1 0 01-1-1V7a1 1 0 011-1z', 'M7 20h10M12 16v4', 'M9 9.5l3 1.5-3 1.5z'],
+    rack: ['M5 3h14a1 1 0 011 1v16a1 1 0 01-1 1H5a1 1 0 01-1-1V4a1 1 0 011-1z', 'M4 8h16M4 13h16M4 18h16', 'M7 5.5h.01M7 10.5h.01M7 15.5h.01'],
+    firewall: ['M3 6h18v12H3z', 'M3 10h18M3 14h18', 'M8 6v4M16 6v4M11 10v4M8 14v4M16 14v4'],
+    switch: ['M3 8h18a1 1 0 011 1v6a1 1 0 01-1 1H3a1 1 0 01-1-1V9a1 1 0 011-1z', 'M6 12h.01M9 12h.01M12 12h.01M15 12h.01M18 12h.01', 'M7 5l2 3M17 5l-2 3'],
+    'load-balancer': ['M12 3a2.5 2.5 0 100 5 2.5 2.5 0 000-5z', 'M5 16a2.5 2.5 0 100 5 2.5 2.5 0 000-5zM12 16a2.5 2.5 0 100 5 2.5 2.5 0 000-5zM19 16a2.5 2.5 0 100 5 2.5 2.5 0 000-5z', 'M12 8v3M5 16v-2a1 1 0 011-1h12a1 1 0 011 1v2M12 11v2'],
+    tunnel: ['M4 20V12a8 8 0 0116 0v8', 'M9 20v-8a3 3 0 016 0v8', 'M2 20h20'],
+    vpn: ['M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6l7-3z', 'M9.5 12.5h5M12 10v5'],
+    dns: ['M12 3a9 9 0 100 18 9 9 0 000-18z', 'M3 12h18M12 3c2.5 2.5 3.5 5.5 3.5 9s-1 6.5-3.5 9c-2.5-2.5-3.5-5.5-3.5-9s1-6.5 3.5-9z', 'M12 12h.01'],
+    web: ['M3 6h18a1 1 0 011 1v11a1 1 0 01-1 1H3a1 1 0 01-1-1V7a1 1 0 011-1z', 'M2 10h20', 'M5 8h.01M7.5 8h.01M10 8h.01'],
+    api: ['M8 6L3 12l5 6M16 6l5 6-5 6', 'M10.5 16l3-8'],
+    'mail-server': ['M4 5h16a1 1 0 011 1v8a1 1 0 01-1 1H4a1 1 0 01-1-1V6a1 1 0 011-1z', 'M4 6l8 5 8-5', 'M7 19h10M12 15v4'],
+    backup: ['M12 4c4.4 0 8 1.1 8 2.5S16.4 9 12 9 4 7.9 4 6.5 7.6 4 12 4z', 'M20 6.5v11c0 1.4-3.6 2.5-8 2.5s-8-1.1-8-2.5v-11', 'M9 13.5l2.5 2.5L16 11.5'],
+    monitoring: ['M3 5h18a1 1 0 011 1v10a1 1 0 01-1 1H3a1 1 0 01-1-1V6a1 1 0 011-1z', 'M5 12h3l2-4 2.5 7 1.5-3h3', 'M8 21h8'],
+    logs: ['M5 3h10l4 4v14a1 1 0 01-1 1H5a1 1 0 01-1-1V4a1 1 0 011-1z', 'M14 3v5h5', 'M8 12h7M8 15h7M8 18h4'],
+    ci: ['M12 4a8 8 0 018 8', 'M20 12a8 8 0 01-8 8 8 8 0 01-8-8 8 8 0 018-8', 'M17 4v4h-4', 'M12 9l2.5 2.5L12 14'],
+    scheduler: ['M12 21a9 9 0 100-18 9 9 0 000 18z', 'M12 7v5l3 2', 'M12 3v1M21 12h-1M12 21v-1M3 12h1'],
+    share: ['M4 7h6l2 2h8a1 1 0 011 1v8a1 1 0 01-1 1H4a1 1 0 01-1-1V8a1 1 0 011-1z', 'M9 14h6M12 12v4'],
+    media: ['M4 5h16a1 1 0 011 1v12a1 1 0 01-1 1H4a1 1 0 01-1-1V6a1 1 0 011-1z', 'M10 9.5l5 2.5-5 2.5z'],
+    'game-server': ['M6 9h12a3 3 0 013 3v2a3 3 0 01-5.2 2l-.8-.8H9l-.8.8A3 3 0 013 14v-2a3 3 0 013-3z', 'M7.5 12h2M8.5 11v2M16 11.5h.01M17.5 13h.01', 'M8 6a4 4 0 018 0'],
+    certificate: ['M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6l7-3z', 'M9.5 11.5l1.8 1.8 3.4-3.4'],
+    edge: ['M12 3a9 9 0 100 18 9 9 0 000-18z', 'M12 8a4 4 0 100 8 4 4 0 000-8z', 'M12 3v3M12 18v3M3 12h3M18 12h3'],
+    maintenance: ['M12 3l9 16H3l9-16z', 'M12 9v4M12 16h.01']
 };
 
+// Keys present in 1.0. Sessions and folders store an icon by name, so these can
+// never be renamed or removed without rewriting vaults that already use them;
+// test/icons.js holds the full list and fails if one disappears.
+const LEGACY_SINCE = '1.0.0';
+
 const ICON_KEYS = Object.keys(ICONS);
+
+// Search terms per icon, so "ubuntu" finds the distro and "k8s" finds
+// kubernetes. Anything not listed is still matched on its own name.
+const ALIASES = {
+    server: 'host machine box', 'server-stack': 'cluster hosts', database: 'db sql postgres mysql mongo',
+    cloud: 'aws azure gcp', terminal: 'shell console cli', linux: 'tux unix',
+    windows: 'win microsoft', apple: 'mac macos osx', docker: 'container image compose',
+    kubernetes: 'k8s kube cluster orchestration', proxmox: 'pve hypervisor virtualisation',
+    ubuntu: 'canonical distro linux', debian: 'distro linux apt', 'raspberry-pi': 'rpi pi arm sbc',
+    nas: 'storage synology truenas unraid', vm: 'virtual machine guest qemu kvm',
+    rack: 'datacenter dc cabinet', firewall: 'pfsense opnsense iptables security',
+    switch: 'network port lan', 'load-balancer': 'haproxy nginx proxy lb',
+    tunnel: 'ssh forward port', vpn: 'wireguard openvpn tailscale', dns: 'bind pihole resolver domain',
+    web: 'http nginx apache site', api: 'rest graphql endpoint', 'mail-server': 'smtp imap postfix mail',
+    backup: 'restic borg snapshot archive', monitoring: 'grafana prometheus metrics zabbix',
+    logs: 'syslog journal elk', ci: 'jenkins pipeline build runner', scheduler: 'cron timer job',
+    share: 'samba smb nfs fileshare', media: 'plex jellyfin emby stream',
+    'game-server': 'minecraft valheim gaming', certificate: 'ssl tls letsencrypt cert',
+    edge: 'iot node remote', maintenance: 'warning broken wip', bug: 'issue debug',
+    key: 'ssh auth credential', lock: 'secure private', shield: 'security protected'
+};
+
+// A session with no icon chosen still shows something specific, using the OS
+// the app already detects on connect. Only ever a fallback: nothing is written
+// to the vault, and picking an icon overrides it.
+const OS_ICONS = [
+    [/proxmox\s*backup/i, 'backup'],
+    [/proxmox|\bpve\b/i, 'proxmox'],
+    [/ubuntu/i, 'ubuntu'],
+    [/debian|raspbian/i, 'debian'],
+    [/raspberry/i, 'raspberry-pi'],
+    [/truenas|freenas|unraid|synology|openmediavault|\bomv\b/i, 'nas'],
+    [/pfsense|opnsense|openwrt|mikrotik/i, 'firewall'],
+    [/windows/i, 'windows'],
+    [/darwin|mac ?os/i, 'apple'],
+    [/android/i, 'android'],
+    [/alpine|arch|fedora|centos|rocky|alma|red ?hat|rhel|suse|gentoo|nixos|linux/i, 'linux'],
+    [/bsd/i, 'shield']
+];
+function iconForOs(os) {
+    if (!os || typeof os !== 'string') return null;
+    for (const [re, key] of OS_ICONS) if (re.test(os)) return key;
+    return null;
+}
+function searchIcons(q) {
+    const needle = String(q || '').trim().toLowerCase();
+    if (!needle) return ICON_KEYS;
+    return ICON_KEYS.filter(k => (k + ' ' + (ALIASES[k] || '')).toLowerCase().includes(needle));
+}
 
 const COLOR_TOKENS = ['txt', 'accent', 'ok', 'warn', 'bad', 'muted'];
 const COLOR_HEX = ['#ef4444', '#f97316', '#f59e0b', '#eab308', '#84cc16', '#22c55e', '#10b981', '#14b8a6', '#06b6d4', '#3b82f6', '#6366f1', '#8b5cf6', '#a855f7', '#ec4899', '#f43f5e', '#94a3b8'];
@@ -147,4 +234,4 @@ function iconSvg(key, color, cls) {
     return `<svg class="${cls || 'w-4 h-4'}" style="color:${resolveColor(color)}" fill="none" stroke="currentColor" viewBox="0 0 24 24">${inner}</svg>`;
 }
 
-module.exports = { ICONS, ICON_KEYS, COLOR_TOKENS, COLOR_HEX, iconSvg, resolveColor };
+module.exports = { ICONS, ICON_KEYS, COLOR_TOKENS, COLOR_HEX, ALIASES, iconSvg, resolveColor, iconForOs, searchIcons, LEGACY_SINCE };

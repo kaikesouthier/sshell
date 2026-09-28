@@ -241,5 +241,31 @@ t('the grid network readout shows upload before download', () => {
     return gridUp > -1 && gridDown > gridUp && statUp > -1 && statDown > statUp;
 });
 
+// --- grid text selection: CSS `zoom`, not transform, so xterm maps correctly ---
+
+t('zoom resizes panes by geometry, not by CSS-scaling their content', () => {
+    const az = grab(gridSrc, 'applyZoom');
+    const ar = grab(gridSrc, 'applyRect');
+    // No CSS scale of the terminals (that is what broke selection); panes are
+    // drawn at canvas * zoom and their terminals re-fit.
+    return !/style\.zoom = state\.zoom/.test(az) && !/transform = 'scale/.test(az)
+        && /r\.w \* z/.test(ar) && /r\.h \* z/.test(ar)
+        && /scheduleZoomFit\(state\)/.test(az);
+});
+t('re-fitting terminals on zoom is debounced to avoid SIGWINCH floods', () => {
+    const sf = grab(gridSrc, 'scheduleZoomFit');
+    return /clearTimeout\(state\._zoomFitTimer\)/.test(sf) && /fitTab\(state, tabId\)/.test(sf);
+});
+t('a drag still positions the pane at canvas * zoom', () =>
+    /\(r\.x - orig\.x\) \* z/.test(grab(gridSrc, 'applyDragFrame')));
+t('switching to column mode clears any leftover canvas scale', () => {
+    const am = grab(gridSrc, 'applyMode');
+    return /l\.style\.zoom = ''/.test(am) && /l\.style\.transform = ''/.test(am);
+});
+t('copying a selection is no longer blocked while zoomed', () => {
+    const term = fs.readFileSync(path.join(ROOT, 'src/terminal.js'), 'utf8');
+    return !/canvasZoomed/.test(term) && /term\.getSelection\(\)/.test(term);
+});
+
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);

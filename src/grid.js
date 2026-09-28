@@ -84,6 +84,13 @@ function buildGridView(tab) {
             targets.forEach(t => { if (t.stream) errs.safeWrite(t.stream, data); });
             return targets.length;
         },
+        // Typed keys go out verbatim; pasted text needs its line endings fixed
+        // and bracketed paste applied per terminal, so it has its own path.
+        pasteToTargets: text => {
+            const targets = interactiveTargets(state);
+            targets.forEach(t => tabsMod().pasteText(t, text));
+            return targets.length;
+        },
         interactiveTargets: () => interactiveTargets(state),
         connectedCount: () => connectedTabs().length,
         startStatsFor: tabId => { const c = state.cells.get(tabId); const t = RT.tabs.find(x => x.id === tabId); if (c && t) gridStartStats(t, c); },
@@ -190,7 +197,7 @@ function scheduleFontFit(state, tabId) {
     clearTimeout(state._fontFit.get(tabId));
     state._fontFit.set(tabId, setTimeout(() => {
         state._fontFit.delete(tabId);
-        if (state.cells.has(tabId)) fitTab(state, tabId, true);
+        if (state.cells.has(tabId)) fitTab(state, tabId);
     }, 140));
 }
 
@@ -199,7 +206,7 @@ function scheduleFontFit(state, tabId) {
 function scheduleZoomFit(state) {
     clearTimeout(state._zoomFitTimer);
     state._zoomFitTimer = setTimeout(() => {
-        state.cells.forEach((els, tabId) => fitTab(state, tabId, true));
+        state.cells.forEach((els, tabId) => fitTab(state, tabId));
     }, 140);
 }
 
@@ -685,7 +692,7 @@ function applyDragFrame() {
     // Reflowing the terminal buffer is the expensive part of a resize; a few
     // times a second is enough to feel live.
     const now = Date.now();
-    if (now - d.lastFit > 90) { d.lastFit = now; fitTab(state, tabId, false); }
+    if (now - d.lastFit > 90) { d.lastFit = now; fitTab(state, tabId); }
 }
 
 // Grow purely from cached numbers — no DOM reads, so this cannot trigger a
@@ -721,19 +728,21 @@ function onDragEnd() {
     }
     if (!d.moved) return;
     if (d.kind === 'move') { suppressClickFor = d.tabId; suppressAt = Date.now(); }
-    // Only tell the remote its window changed once, on release — doing it per
-    // pointermove would flood the connection with SIGWINCH traffic.
-    fitTab(d.state, d.tabId, true);
+    fitTab(d.state, d.tabId);
     rememberRect(d.tabId, getRect(d.state, d.tabId));
     growCanvas(d.state);
 }
 
-function fitTab(state, tabId, notifyRemote) {
+// Resizing a pane without telling the far side leaves tmux (or any full-screen
+// program) painting for the old geometry, so the size always goes with the fit;
+// syncWindow sends nothing when the row/column count has not actually moved.
+function fitTab(state, tabId, scrollToBottom) {
     const t = RT.tabs.find(x => x.id === tabId);
     if (!t || !t.fitAddon || !t.term) return;
     try {
         t.fitAddon.fit();
-        if (notifyRemote && t.stream && t.stream.setWindow) t.stream.setWindow(t.term.rows, t.term.cols, 0, 0);
+        tabsMod().syncWindow(t);
+        if (scrollToBottom) t.term.scrollToBottom();
     } catch (e) { require('./errors').record('grid.fit', e); }
 }
 
@@ -952,7 +961,7 @@ function gridMount(state) {
 
         if (state.mode === 'free') applyRect(state, t.id);
 
-        requestAnimationFrame(() => { try { t.fitAddon.fit(); if (t.stream && t.stream.setWindow) t.stream.setWindow(t.term.rows, t.term.cols, 0, 0); t.term.scrollToBottom(); } catch (e) {} });
+        requestAnimationFrame(() => fitTab(state, t.id, true));
         gridStartStats(t, els);
     });
     state.mounted = true;
@@ -990,11 +999,7 @@ function gridRefit(state) {
     // resize reflows the layout instead of squishing panes past usability.
     applyColumns(state);
     requestAnimationFrame(() => {
-        state.cells.forEach((els, tabId) => {
-            const t = RT.tabs.find(x => x.id === tabId);
-            if (!t || !t.fitAddon) return;
-            try { t.fitAddon.fit(); if (t.stream && t.stream.setWindow) t.stream.setWindow(t.term.rows, t.term.cols, 0, 0); t.term.scrollToBottom(); } catch (e) {}
-        });
+        state.cells.forEach((els, tabId) => fitTab(state, tabId, true));
     });
 }
 
@@ -1013,8 +1018,10 @@ function gridStartStats(tab, els) {
         if (tab._gridBusy) return;
         tab._gridBusy = true;
         let buf = '';
-        const fail = e => {
+        const fail = (e, stream) => {
             tab._gridBusy = false;
+            // An abandoned channel holds a session slot on the server.
+            if (stream) { try { stream.close(); } catch (err) {} }
             tab._gridFails = (tab._gridFails || 0) + 1;
             if (e) errors.record('grid.stats', e, tab.title);
             if (tab._gridFails >= 5) gridStopStats(tab);
@@ -1025,11 +1032,14 @@ function gridStartStats(tab, els) {
                 if (tab.closed) { tab._gridBusy = false; try { stream.close(); } catch (e) {} return; }
                 errors.guardStream(stream, 'grid.stats');
                 // 'error' without 'close' would latch _gridBusy true forever.
-                stream.on('error', e => fail(e));
+                stream.on('error', e => fail(e, stream));
                 stream.on('data', d => { buf += d.toString(); });
                 stream.stderr.on('data', () => {});
                 stream.on('close', () => {
                     tab._gridBusy = false;
+                    // Nothing came back: count it, so an unpollable host is
+                    // dropped rather than re-probed once a second forever.
+                    if (buf.indexOf('K_NET') === -1) return fail(null);
                     try { parseGridSample(tab, buf); tab._gridFails = 0; }
                     catch (e) { errors.record('grid.parse', e); }
                 });
@@ -1150,7 +1160,7 @@ function init() {
         const t = clipboard.readText();
         if (!t) return;
         if (await require('./dialog').confirm(
-            `Paste the clipboard into ${n} selected server${n === 1 ? '' : 's'}?`, { okLabel: 'Paste' })) g.broadcast(t);
+            `Paste the clipboard into ${n} selected server${n === 1 ? '' : 's'}?`, { okLabel: 'Paste' })) g.pasteToTargets(t);
     });
     const setCols = n => { const g = activeGrid(); if (g) g.setCols(n); updateGridToolbar(); };
     COL_CHOICES.forEach(c => { const b = $('btnCols' + c); if (b) b.addEventListener('click', () => setCols(c)); });
